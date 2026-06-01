@@ -60,7 +60,7 @@ class WalkForwardSegmentRepository(BaseRepository[WalkForwardSegment]):
         if not segments:
             return 0
         try:
-            collection = WalkForwardSegment.get_motor_collection()
+            collection = WalkForwardSegment.get_pymongo_collection()
             operations = [
                 InsertOne(s.model_dump(exclude={"id"})) for s in segments
             ]

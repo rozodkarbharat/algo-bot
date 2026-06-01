@@ -18,7 +18,7 @@ class SystemHealthStatusRepository(BaseRepository[SystemHealthStatus]):
     async def upsert(self, status: SystemHealthStatus) -> None:
         """Insert or replace by component_name."""
         try:
-            collection = SystemHealthStatus.get_motor_collection()
+            collection = SystemHealthStatus.get_pymongo_collection()
             doc = status.model_dump(mode="python")
             doc.pop("id", None)
             await collection.update_one(

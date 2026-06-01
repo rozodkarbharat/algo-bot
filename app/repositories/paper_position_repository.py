@@ -44,7 +44,7 @@ class PaperPositionRepository(BaseRepository[PaperPosition]):
         updates without round-tripping a full read.
         """
         try:
-            collection = PaperPosition.get_motor_collection()
+            collection = PaperPosition.get_pymongo_collection()
             doc = position.model_dump(exclude={"id"})
             await collection.update_one(
                 {"position_id": position.position_id},
@@ -66,7 +66,7 @@ class PaperPositionRepository(BaseRepository[PaperPosition]):
         if not positions:
             return 0
         try:
-            collection = PaperPosition.get_motor_collection()
+            collection = PaperPosition.get_pymongo_collection()
             ops = [
                 ReplaceOne(
                     {"position_id": p.position_id},
@@ -156,7 +156,7 @@ class PaperPositionRepository(BaseRepository[PaperPosition]):
     async def delete_for_date(self, trading_date: datetime) -> int:
         """Delete every paper position for `trading_date` (used by reset job)."""
         try:
-            collection = PaperPosition.get_motor_collection()
+            collection = PaperPosition.get_pymongo_collection()
             result = await collection.delete_many({"trading_date": trading_date})
             return result.deleted_count
         except Exception as exc:

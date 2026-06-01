@@ -66,7 +66,7 @@ export function Dashboard() {
 
   if (loadingEngine) return <PageSpinner />
 
-  const todaySignals = engineStatus?.signals_emitted ?? 0
+  const todaySignals = engineStatus?.signals_today ?? 0
   const winRate = paperAccount?.win_rate != null ? paperAccount.win_rate * 100 : null
   const totalPnl = paperPnl?.total_pnl ?? 0
   const activePositions = openPositions?.total ?? 0
@@ -84,13 +84,15 @@ export function Dashboard() {
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <StatCard
             label="Engine Status"
-            value={engineStatus?.is_active ? 'ACTIVE' : 'STOPPED'}
-            valueClass={engineStatus?.is_active ? 'text-bull' : 'text-gray-500'}
+            value={engineStatus?.running ? 'ACTIVE' : 'STOPPED'}
+            valueClass={engineStatus?.running ? 'text-bull' : 'text-gray-500'}
             icon={<Activity className="h-4 w-4" />}
             sub={
-              engineStatus?.trading_date
-                ? `Date: ${engineStatus.trading_date}`
-                : 'Not started'
+              engineStatus?.market_open
+                ? engineStatus.session_active
+                  ? 'Market open · entry window'
+                  : 'Market open'
+                : 'Market closed'
             }
           />
           <StatCard

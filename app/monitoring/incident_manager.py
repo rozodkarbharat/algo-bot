@@ -237,7 +237,7 @@ class IncidentManager:
 
     async def _upsert(self, incident: SystemIncident) -> None:
         try:
-            collection = SystemIncident.get_motor_collection()
+            collection = SystemIncident.get_pymongo_collection()
             doc = incident.model_dump(mode="python")
             doc.pop("id", None)
             await collection.update_one(

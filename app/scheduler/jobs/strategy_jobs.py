@@ -105,13 +105,23 @@ async def daily_shortlist_generation() -> None:
     """
     logger.info("=== Daily Shortlist Generation job started ===")
     try:
-        from app.services.shortlist_service import ShortlistService
+        from app.core.exceptions import ConflictException
+        from app.services.shortlist_service import shortlist_run_manager
         from app.utils.trading_day import get_next_trading_day
 
-        svc = ShortlistService()
-        # Generate for the NEXT trading day (today's shortlist = what we trade tomorrow)
+        # Generate for the NEXT trading day (today's shortlist = what we trade tomorrow).
+        # Routed through the run-manager so manual /api/v1/shortlist/run and the
+        # scheduler share the same single-flight lock and status state.
         next_trading_day = get_next_trading_day(last_completed_trading_day())
-        result = await svc.generate_shortlist(target_date=next_trading_day)
+        try:
+            result = await shortlist_run_manager.run(
+                target_date=next_trading_day, trigger="scheduler"
+            )
+        except ConflictException:
+            logger.warning(
+                "Skipping scheduled shortlist run — another run is already in progress."
+            )
+            return
 
         logger.info(
             "=== Shortlist for %s: %d candidates from %d one-side stocks | %.3fs ===",

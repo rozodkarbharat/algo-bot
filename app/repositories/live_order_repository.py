@@ -57,7 +57,7 @@ class LiveOrderRepository(BaseRepository[LiveOrder]):
         """Replace the document keyed by order_id, or insert if absent."""
         try:
             order.mark_updated()
-            collection = LiveOrder.get_motor_collection()
+            collection = LiveOrder.get_pymongo_collection()
             doc = order.model_dump(exclude={"id"})
             await collection.update_one(
                 {"order_id": order.order_id},
@@ -75,7 +75,7 @@ class LiveOrderRepository(BaseRepository[LiveOrder]):
         if not orders:
             return 0
         try:
-            collection = LiveOrder.get_motor_collection()
+            collection = LiveOrder.get_pymongo_collection()
             ops = [
                 ReplaceOne(
                     {"order_id": o.order_id},

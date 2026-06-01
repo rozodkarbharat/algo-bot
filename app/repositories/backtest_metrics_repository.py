@@ -28,7 +28,7 @@ class BacktestMetricsRepository(BaseRepository[BacktestMetrics]):
         for the same run_id.
         """
         try:
-            collection = BacktestMetrics.get_motor_collection()
+            collection = BacktestMetrics.get_pymongo_collection()
             doc = metrics.model_dump(exclude={"id"})
             result = await collection.update_one(
                 {"run_id": metrics.run_id},
@@ -59,7 +59,7 @@ class BacktestMetricsRepository(BaseRepository[BacktestMetrics]):
     async def delete_by_run_id(self, run_id: str) -> bool:
         """Delete metrics for a run. Returns True if deleted."""
         try:
-            collection = BacktestMetrics.get_motor_collection()
+            collection = BacktestMetrics.get_pymongo_collection()
             result = await collection.delete_one({"run_id": run_id})
             return result.deleted_count > 0
         except Exception as exc:

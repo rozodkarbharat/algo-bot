@@ -26,6 +26,28 @@ export interface ShortlistResponse {
   generated_at: string
 }
 
+export interface ShortlistRunResponse {
+  status: string
+  target_date: string
+  total_checked: number
+  total_shortlisted: number
+  duration_seconds: number
+  threshold_pct: number
+}
+
+export interface ShortlistStatusResponse {
+  running: boolean
+  last_status: 'idle' | 'running' | 'success' | 'error'
+  last_started_at: string | null
+  last_finished_at: string | null
+  last_target_date: string | null
+  last_total_checked: number
+  last_total_shortlisted: number
+  last_duration_seconds: number | null
+  last_error: string | null
+  last_trigger: 'manual' | 'scheduler' | null
+}
+
 export interface LiveSignalResponse {
   id: string
   symbol: string
@@ -57,12 +79,14 @@ export interface IntradayMarketStateResponse {
 }
 
 export interface LiveEngineStatusResponse {
-  is_active: boolean
-  trading_date: string | null
-  candidates_loaded: number
-  signals_emitted: number
-  started_at: string | null
-  stopped_at: string | null
+  running: boolean
+  subscribed_symbols: string[]
+  signals_today: number
+  trade_locked_today: number
+  session_active: boolean
+  market_open: boolean
+  last_started_at: string | null
+  last_stopped_at: string | null
 }
 
 export interface LiveHealthResponse {

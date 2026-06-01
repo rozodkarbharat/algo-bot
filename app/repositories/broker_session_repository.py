@@ -26,7 +26,7 @@ class BrokerSessionRepository(BaseRepository[BrokerSession]):
     async def upsert(self, session: BrokerSession) -> BrokerSession:
         try:
             session.mark_updated()
-            collection = BrokerSession.get_motor_collection()
+            collection = BrokerSession.get_pymongo_collection()
             doc = session.model_dump(exclude={"id"})
             await collection.update_one(
                 {"broker_name": session.broker_name},
@@ -56,7 +56,7 @@ class BrokerSessionRepository(BaseRepository[BrokerSession]):
             if error is not None:
                 update["last_error"] = error
                 update["last_error_at"] = datetime.now(timezone.utc)
-            collection = BrokerSession.get_motor_collection()
+            collection = BrokerSession.get_pymongo_collection()
             await collection.update_one(
                 {"broker_name": broker_name},
                 {"$set": update},

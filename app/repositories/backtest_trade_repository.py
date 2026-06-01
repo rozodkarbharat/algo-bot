@@ -33,7 +33,7 @@ class BacktestTradeRepository(BaseRepository[BacktestTrade]):
         if not trades:
             return 0
         try:
-            collection = BacktestTrade.get_motor_collection()
+            collection = BacktestTrade.get_pymongo_collection()
             operations = [
                 InsertOne(t.model_dump(exclude={"id"})) for t in trades
             ]
@@ -165,7 +165,7 @@ class BacktestTradeRepository(BaseRepository[BacktestTrade]):
     async def delete_trades_for_run(self, run_id: str) -> int:
         """Delete all trade documents for a run. Returns count deleted."""
         try:
-            collection = BacktestTrade.get_motor_collection()
+            collection = BacktestTrade.get_pymongo_collection()
             result = await collection.delete_many({"run_id": run_id})
             return result.deleted_count
         except Exception as exc:

@@ -103,6 +103,15 @@ class ValidationException(TradingBotException):
         super().__init__(message=message, status_code=422, detail=detail)
 
 
+# ── Conflict (duplicate operation, in-progress job, etc.) ─────────────────────
+
+class ConflictException(TradingBotException):
+    """Raised when a request conflicts with current state (e.g. duplicate run)."""
+
+    def __init__(self, message: str = "Conflict with current state.", detail: Any = None) -> None:
+        super().__init__(message=message, status_code=409, detail=detail)
+
+
 # ── Scheduler ────────────────────────────────────────────────────────────────
 
 class SchedulerException(TradingBotException):

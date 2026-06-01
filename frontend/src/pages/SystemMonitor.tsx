@@ -170,9 +170,9 @@ export function SystemMonitor() {
               <div className="flex items-center justify-between">
                 <span className="text-xs text-gray-500">Status</span>
                 <StatusDot
-                  status={liveStatus?.is_active ? 'online' : 'offline'}
-                  label={liveStatus?.is_active ? 'Running' : 'Stopped'}
-                  animate={liveStatus?.is_active}
+                  status={liveStatus?.running ? 'online' : 'offline'}
+                  label={liveStatus?.running ? 'Running' : 'Stopped'}
+                  animate={liveStatus?.running}
                 />
               </div>
               <div className="flex items-center justify-between">

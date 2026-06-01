@@ -48,7 +48,7 @@ export function LiveSignals() {
   )
 
   useEffect(() => {
-    if (signalsData) setSignals(signalsData.items)
+    if (signalsData) setSignals(signalsData.items ?? [])
   }, [signalsData, setSignals])
 
   useEffect(() => {
@@ -181,7 +181,7 @@ export function LiveSignals() {
               label={wsStatus === 'connected' ? 'WS live' : wsStatus}
               animate={wsStatus === 'connected'}
             />
-            {engineStatus?.is_active ? (
+            {engineStatus?.running ? (
               <Button
                 variant="danger"
                 size="sm"
@@ -211,26 +211,26 @@ export function LiveSignals() {
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <div className="rounded-lg border border-border bg-surface p-3">
             <p className="text-xs text-gray-500 uppercase tracking-wider">Engine</p>
-            <p className={`mt-1 text-lg font-mono font-bold ${engineStatus?.is_active ? 'text-bull' : 'text-gray-500'}`}>
-              {engineStatus?.is_active ? 'ACTIVE' : 'STOPPED'}
+            <p className={`mt-1 text-lg font-mono font-bold ${engineStatus?.running ? 'text-bull' : 'text-gray-500'}`}>
+              {engineStatus?.running ? 'ACTIVE' : 'STOPPED'}
             </p>
           </div>
           <div className="rounded-lg border border-border bg-surface p-3">
-            <p className="text-xs text-gray-500 uppercase tracking-wider">Candidates</p>
+            <p className="text-xs text-gray-500 uppercase tracking-wider">Watchlist</p>
             <p className="mt-1 text-lg font-mono font-bold text-accent">
-              {engineStatus?.candidates_loaded ?? 0}
+              {engineStatus?.subscribed_symbols?.length ?? 0}
             </p>
           </div>
           <div className="rounded-lg border border-border bg-surface p-3">
             <p className="text-xs text-gray-500 uppercase tracking-wider">Signals Today</p>
             <p className="mt-1 text-lg font-mono font-bold text-gray-100">
-              {engineStatus?.signals_emitted ?? 0}
+              {engineStatus?.signals_today ?? 0}
             </p>
           </div>
           <div className="rounded-lg border border-border bg-surface p-3">
             <p className="text-xs text-gray-500 uppercase tracking-wider">Started At</p>
             <p className="mt-1 text-sm font-mono text-gray-400">
-              {fmtTime(engineStatus?.started_at)}
+              {fmtTime(engineStatus?.last_started_at)}
             </p>
           </div>
         </div>
@@ -265,7 +265,7 @@ export function LiveSignals() {
         </div>
 
         {/* Intraday market state */}
-        {marketState && marketState.items.length > 0 && (
+        {marketState && marketState.length > 0 && (
           <Card title="Intraday Market State" subtitle="Per-symbol engine tracking">
             <Table
               columns={[
@@ -336,7 +336,7 @@ export function LiveSignals() {
                   render: (row) => fmtTime(row.last_candle_time),
                 },
               ]}
-              data={marketState.items}
+              data={marketState}
               rowKey={(row) => row.symbol}
             />
           </Card>

@@ -195,7 +195,7 @@ async def authenticate_user(username: str, password: str) -> User:
 async def login(username: str, password: str) -> tuple[str, str, User]:
     """Full login flow. Returns (access_token, refresh_token, user)."""
     user = await authenticate_user(username, password)
-
+    
     user.last_login = datetime.now(timezone.utc)
     await user.save()
 

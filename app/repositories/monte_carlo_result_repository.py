@@ -42,7 +42,7 @@ class MonteCarloResultRepository(BaseRepository[MonteCarloResult]):
         if not results:
             return 0
         try:
-            collection = MonteCarloResult.get_motor_collection()
+            collection = MonteCarloResult.get_pymongo_collection()
             operations = [InsertOne(r.model_dump(exclude={"id"})) for r in results]
             result = await collection.bulk_write(operations, ordered=False)
             logger.debug(

@@ -32,7 +32,7 @@ class PaperAccountRepository(BaseRepository[PaperAccount]):
     async def upsert(self, account: PaperAccount) -> PaperAccount:
         """Insert or replace the account row keyed by account_id."""
         try:
-            collection = PaperAccount.get_motor_collection()
+            collection = PaperAccount.get_pymongo_collection()
             doc = account.model_dump(exclude={"id"})
             result = await collection.update_one(
                 {"account_id": account.account_id},

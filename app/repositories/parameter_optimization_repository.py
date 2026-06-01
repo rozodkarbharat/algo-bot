@@ -75,7 +75,7 @@ class ParameterOptimizationRepository(BaseRepository[ParameterOptimizationResult
         if not results:
             return 0
         try:
-            collection = ParameterOptimizationResult.get_motor_collection()
+            collection = ParameterOptimizationResult.get_pymongo_collection()
             ops = [InsertOne(r.model_dump(exclude={"id"})) for r in results]
             bulk_result = await collection.bulk_write(ops, ordered=False)
             count = bulk_result.inserted_count

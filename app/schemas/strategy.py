@@ -148,6 +148,49 @@ class ShortlistResponse(BaseModel):
     entries: list[ShortlistEntryResponse]
 
 
+class ShortlistRunRequest(BaseModel):
+    """Optional body for POST /api/v1/shortlist/run."""
+
+    target_date: Optional[date] = Field(
+        default=None,
+        description="Date to generate the shortlist for. Defaults to today's trading day.",
+    )
+    probability_threshold: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Override OSD_CONTINUATION_THRESHOLD (0.0–1.0).",
+    )
+
+
+class ShortlistRunResponse(BaseModel):
+    """Result of a manual shortlist run."""
+
+    status: str = Field(..., description="success | error")
+    target_date: date
+    total_checked: int = Field(..., description="Number of stocks evaluated")
+    total_shortlisted: int = Field(..., description="Number of stocks added to the shortlist")
+    duration_seconds: float
+    threshold_pct: float
+
+
+class ShortlistStatusResponse(BaseModel):
+    """Current state of the shortlist run manager."""
+
+    running: bool = Field(..., description="True if a run is currently in progress")
+    last_status: str = Field(..., description="idle | running | success | error")
+    last_started_at: Optional[datetime] = None
+    last_finished_at: Optional[datetime] = None
+    last_target_date: Optional[date] = None
+    last_total_checked: int = 0
+    last_total_shortlisted: int = 0
+    last_duration_seconds: Optional[float] = None
+    last_error: Optional[str] = None
+    last_trigger: Optional[str] = Field(
+        default=None, description="manual | scheduler"
+    )
+
+
 class DetectionSummaryResponse(BaseModel):
     """Summary returned after a bulk OSD detection run."""
 

@@ -45,7 +45,7 @@ class HistoricalCandleRepository(BaseRepository[HistoricalCandle]):
         Returns True if a new document was inserted, False if updated.
         """
         try:
-            collection = HistoricalCandle.get_motor_collection()
+            collection = HistoricalCandle.get_pymongo_collection()
             candle_dicts = [c.model_dump() for c in candles]
             result = await collection.update_one(
                 {
@@ -86,7 +86,7 @@ class HistoricalCandleRepository(BaseRepository[HistoricalCandle]):
         if not buckets:
             return 0
         try:
-            collection = HistoricalCandle.get_motor_collection()
+            collection = HistoricalCandle.get_pymongo_collection()
             operations = [
                 ReplaceOne(
                     {
@@ -189,7 +189,7 @@ class HistoricalCandleRepository(BaseRepository[HistoricalCandle]):
         Used by the ingestion service to skip already-present dates.
         """
         try:
-            collection = HistoricalCandle.get_motor_collection()
+            collection = HistoricalCandle.get_pymongo_collection()
             cursor = collection.find(
                 {
                     "symbol": symbol,

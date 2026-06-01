@@ -84,7 +84,7 @@ class StockPerformanceAnalyticsRepository(BaseRepository[StockPerformanceAnalyti
         if not records:
             return 0
         try:
-            collection = StockPerformanceAnalytics.get_motor_collection()
+            collection = StockPerformanceAnalytics.get_pymongo_collection()
             ops = [
                 UpdateOne(
                     {"symbol": rec.symbol},

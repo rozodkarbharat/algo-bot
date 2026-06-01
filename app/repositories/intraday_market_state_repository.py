@@ -31,7 +31,7 @@ class IntradayMarketStateRepository(BaseRepository[IntradayMarketState]):
         Insert or replace a state row identified by (symbol, trading_date).
         """
         try:
-            collection = IntradayMarketState.get_motor_collection()
+            collection = IntradayMarketState.get_pymongo_collection()
             doc = state.model_dump(exclude={"id"})
             result = await collection.update_one(
                 {"symbol": state.symbol, "trading_date": state.trading_date},
@@ -56,7 +56,7 @@ class IntradayMarketStateRepository(BaseRepository[IntradayMarketState]):
         if not states:
             return 0
         try:
-            collection = IntradayMarketState.get_motor_collection()
+            collection = IntradayMarketState.get_pymongo_collection()
             operations = [
                 ReplaceOne(
                     {"symbol": s.symbol, "trading_date": s.trading_date},
@@ -81,7 +81,7 @@ class IntradayMarketStateRepository(BaseRepository[IntradayMarketState]):
         next session boots. Returns the number of deleted documents.
         """
         try:
-            collection = IntradayMarketState.get_motor_collection()
+            collection = IntradayMarketState.get_pymongo_collection()
             result = await collection.delete_many({"trading_date": trading_date})
             logger.info(
                 "Cleared %d IntradayMarketState rows for %s.",

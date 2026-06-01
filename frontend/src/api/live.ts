@@ -26,7 +26,7 @@ export const liveApi = {
 
   marketState: () =>
     apiClient
-      .get<PaginatedResponse<IntradayMarketStateResponse>>('/api/v1/live/market-state')
+      .get<IntradayMarketStateResponse[]>('/api/v1/live/market-state')
       .then(extractData),
 
   status: () =>

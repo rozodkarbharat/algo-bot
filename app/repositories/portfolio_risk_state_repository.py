@@ -35,7 +35,7 @@ class PortfolioRiskStateRepository(BaseRepository[PortfolioRiskState]):
     async def upsert(self, state: PortfolioRiskState) -> None:
         """Atomically insert or replace the risk state document for the date."""
         try:
-            collection = PortfolioRiskState.get_motor_collection()
+            collection = PortfolioRiskState.get_pymongo_collection()
             doc = state.model_dump(mode="python")
             doc.pop("id", None)
             await collection.update_one(

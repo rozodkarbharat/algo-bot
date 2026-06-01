@@ -27,7 +27,7 @@ class BrokerReconciliationRunRepository(BaseRepository[BrokerReconciliationRun])
 
     async def upsert(self, run: BrokerReconciliationRun) -> BrokerReconciliationRun:
         try:
-            collection = BrokerReconciliationRun.get_motor_collection()
+            collection = BrokerReconciliationRun.get_pymongo_collection()
             doc = run.model_dump(exclude={"id"})
             await collection.update_one(
                 {"run_id": run.run_id}, {"$set": doc}, upsert=True
@@ -82,7 +82,7 @@ class BrokerDiscrepancyRepository(BaseRepository[BrokerDiscrepancy]):
 
     async def upsert(self, discrepancy: BrokerDiscrepancy) -> BrokerDiscrepancy:
         try:
-            collection = BrokerDiscrepancy.get_motor_collection()
+            collection = BrokerDiscrepancy.get_pymongo_collection()
             doc = discrepancy.model_dump(exclude={"id"})
             await collection.update_one(
                 {"discrepancy_id": discrepancy.discrepancy_id},

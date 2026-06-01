@@ -27,7 +27,7 @@ class ContinuationStatisticRepository(BaseRepository[ContinuationStatistic]):
         Keyed on symbol (unique index). Uses Motor upsert to avoid read-before-write.
         """
         try:
-            collection = ContinuationStatistic.get_motor_collection()
+            collection = ContinuationStatistic.get_pymongo_collection()
             doc = stat.model_dump(exclude={"id"})
             result = await collection.update_one(
                 {"symbol": stat.symbol},

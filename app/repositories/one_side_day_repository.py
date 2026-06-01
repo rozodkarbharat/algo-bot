@@ -31,7 +31,7 @@ class OneSideDayRepository(BaseRepository[OneSideDay]):
         Uses Motor upsert to avoid read-before-write. Returns the saved document.
         """
         try:
-            collection = OneSideDay.get_motor_collection()
+            collection = OneSideDay.get_pymongo_collection()
             doc = record.model_dump(exclude={"id"})
             # Ensure datetime fields are serialized to native datetime objects.
             result = await collection.update_one(
@@ -64,7 +64,7 @@ class OneSideDayRepository(BaseRepository[OneSideDay]):
         if not records:
             return 0
         try:
-            collection = OneSideDay.get_motor_collection()
+            collection = OneSideDay.get_pymongo_collection()
             operations = [
                 ReplaceOne(
                     {"symbol": r.symbol, "trading_date": r.trading_date},

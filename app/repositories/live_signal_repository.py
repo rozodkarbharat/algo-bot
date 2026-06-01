@@ -66,7 +66,7 @@ class LiveSignalRepository(BaseRepository[LiveSignal]):
     ) -> Optional[LiveSignal]:
         """Update a signal's status by signal_id; returns the updated document."""
         try:
-            collection = LiveSignal.get_motor_collection()
+            collection = LiveSignal.get_pymongo_collection()
             result = await collection.find_one_and_update(
                 {"signal_id": signal_id},
                 {"$set": {"signal_status": status.value}},

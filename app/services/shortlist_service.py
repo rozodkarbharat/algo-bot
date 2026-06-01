@@ -17,12 +17,14 @@ Architecture:
   - Routes call this service; they never touch repositories.
 """
 
+import asyncio
 import time
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from typing import Optional
 
 from app.config.settings import settings
+from app.core.exceptions import ConflictException
 from app.models.continuation_statistic import ContinuationStatistic
 from app.models.one_side_day import OneSideDay
 from app.repositories.continuation_statistic_repository import ContinuationStatisticRepository
@@ -249,3 +251,134 @@ class ShortlistService:
         yesterday_dt = date_to_utc_midnight(yesterday)
         records = await self._osd_repo.get_by_date(yesterday_dt)
         return [r for r in records if r.is_one_side]
+
+
+# ── Shortlist Run Manager ─────────────────────────────────────────────────────
+#
+# Thin singleton wrapper around `ShortlistService.generate_shortlist()` that
+# tracks "is a run in progress?" plus the last run's outcome. Used by:
+#   * The 16:30 IST APScheduler job (`daily_shortlist_generation`)
+#   * The manual `POST /api/v1/shortlist/run` endpoint
+#
+# Both paths funnel through the same `run()` method so business logic is not
+# duplicated and status is consistent across automatic and manual triggers.
+# An asyncio.Lock guarantees single-flight execution: a second run started
+# while one is in flight raises ConflictException.
+
+
+@dataclass
+class ShortlistRunSnapshot:
+    """Public state of the shortlist run manager."""
+
+    running: bool
+    last_status: str  # "idle" | "running" | "success" | "error"
+    last_started_at: Optional[datetime] = None
+    last_finished_at: Optional[datetime] = None
+    last_target_date: Optional[date] = None
+    last_total_checked: int = 0
+    last_total_shortlisted: int = 0
+    last_duration_seconds: Optional[float] = None
+    last_error: Optional[str] = None
+    last_trigger: Optional[str] = None  # "manual" | "scheduler"
+
+    def to_dict(self) -> dict:
+        return {
+            "running": self.running,
+            "last_status": self.last_status,
+            "last_started_at": self.last_started_at.isoformat() if self.last_started_at else None,
+            "last_finished_at": self.last_finished_at.isoformat() if self.last_finished_at else None,
+            "last_target_date": self.last_target_date.isoformat() if self.last_target_date else None,
+            "last_total_checked": self.last_total_checked,
+            "last_total_shortlisted": self.last_total_shortlisted,
+            "last_duration_seconds": (
+                round(self.last_duration_seconds, 3) if self.last_duration_seconds is not None else None
+            ),
+            "last_error": self.last_error,
+            "last_trigger": self.last_trigger,
+        }
+
+
+class ShortlistRunManager:
+    """Process-wide single-flight runner for shortlist generation."""
+
+    def __init__(self, service: Optional[ShortlistService] = None) -> None:
+        self._service = service or ShortlistService()
+        self._lock = asyncio.Lock()
+        self._state = ShortlistRunSnapshot(running=False, last_status="idle")
+
+    @property
+    def is_running(self) -> bool:
+        return self._state.running
+
+    def snapshot(self) -> ShortlistRunSnapshot:
+        return self._state
+
+    async def run(
+        self,
+        target_date: Optional[date] = None,
+        probability_threshold: Optional[float] = None,
+        trigger: str = "manual",
+    ) -> ShortlistResult:
+        """
+        Execute one shortlist generation. Raises ConflictException if another
+        run is already in flight. Reuses `ShortlistService.generate_shortlist()`
+        — no business logic lives here.
+        """
+        if self._state.running:
+            raise ConflictException(
+                "A shortlist run is already in progress.",
+                detail={
+                    "started_at": (
+                        self._state.last_started_at.isoformat()
+                        if self._state.last_started_at
+                        else None
+                    ),
+                    "trigger": self._state.last_trigger,
+                },
+            )
+
+        async with self._lock:
+            # Re-check after acquiring the lock (race-safety).
+            if self._state.running:
+                raise ConflictException("A shortlist run is already in progress.")
+
+            self._state = ShortlistRunSnapshot(
+                running=True,
+                last_status="running",
+                last_started_at=datetime.now(timezone.utc),
+                last_target_date=target_date,
+                last_trigger=trigger,
+            )
+            try:
+                result = await self._service.generate_shortlist(
+                    target_date=target_date,
+                    probability_threshold=probability_threshold,
+                )
+                self._state = ShortlistRunSnapshot(
+                    running=False,
+                    last_status="success",
+                    last_started_at=self._state.last_started_at,
+                    last_finished_at=datetime.now(timezone.utc),
+                    last_target_date=result.target_date,
+                    last_total_checked=result.total_candidates_checked,
+                    last_total_shortlisted=len(result.entries),
+                    last_duration_seconds=result.duration_seconds,
+                    last_trigger=trigger,
+                )
+                return result
+            except Exception as exc:
+                self._state = ShortlistRunSnapshot(
+                    running=False,
+                    last_status="error",
+                    last_started_at=self._state.last_started_at,
+                    last_finished_at=datetime.now(timezone.utc),
+                    last_target_date=self._state.last_target_date,
+                    last_error=str(exc),
+                    last_trigger=trigger,
+                )
+                logger.exception("Shortlist run failed: %s", exc)
+                raise
+
+
+# Process-wide singleton consumed by routes AND scheduler jobs.
+shortlist_run_manager = ShortlistRunManager()

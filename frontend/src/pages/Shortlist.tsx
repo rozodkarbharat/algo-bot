@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { Search, SlidersHorizontal } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { CheckCircle2, Play, Search, SlidersHorizontal, XCircle } from 'lucide-react'
 import { Header } from '@/layouts/Header'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -10,18 +10,38 @@ import { PageSpinner } from '@/components/ui/Spinner'
 import { shortlistApi } from '@/api'
 import { fmtPct, fmtPrice, fmtDateTime } from '@/utils/formatters'
 import type { ShortlistEntry } from '@/types/signal'
+import type { AxiosError } from 'axios'
+
+type ToastVariant = 'success' | 'error'
+interface Toast {
+  id: number
+  variant: ToastVariant
+  message: string
+}
 
 type SortKey = 'probability' | 'symbol' | 'first_candle_range_pct'
 type SortDir = 'asc' | 'desc'
 type FilterDir = 'ALL' | 'BULLISH' | 'BEARISH'
 
 export function Shortlist() {
+  const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [filterDir, setFilterDir] = useState<FilterDir>('ALL')
   const [filterTradable, setFilterTradable] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>('probability')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [threshold, setThreshold] = useState<number>(0.6)
+  const [toast, setToast] = useState<Toast | null>(null)
+
+  const showToast = (variant: ToastVariant, message: string) => {
+    setToast({ id: Date.now(), variant, message })
+  }
+
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(null), 4_000)
+    return () => clearTimeout(t)
+  }, [toast])
 
   const {
     data: shortlist,
@@ -33,6 +53,38 @@ export function Shortlist() {
     queryFn: () => shortlistApi.today(threshold),
     refetchInterval: 60_000,
   })
+
+  // Poll run-manager status: enables/disables the Run button consistently
+  // when the scheduler triggers a run, not just from this browser tab.
+  const { data: runStatus } = useQuery({
+    queryKey: ['shortlist', 'status'],
+    queryFn: shortlistApi.status,
+    refetchInterval: 5_000,
+  })
+
+  const runMutation = useMutation({
+    mutationFn: () => shortlistApi.run({ probability_threshold: threshold }),
+    onSuccess: (data) => {
+      showToast(
+        'success',
+        `Shortlist run finished — ${data.total_shortlisted} of ${data.total_checked} stocks shortlisted (${data.duration_seconds.toFixed(2)}s)`,
+      )
+      queryClient.invalidateQueries({ queryKey: ['shortlist', 'today'] })
+      queryClient.invalidateQueries({ queryKey: ['shortlist', 'status'] })
+    },
+    onError: (err: AxiosError<{ message?: string }>) => {
+      const apiMsg = err.response?.data?.message
+      const status = err.response?.status
+      if (status === 409) {
+        showToast('error', apiMsg || 'A shortlist run is already in progress.')
+      } else {
+        showToast('error', apiMsg || err.message || 'Shortlist run failed.')
+      }
+      queryClient.invalidateQueries({ queryKey: ['shortlist', 'status'] })
+    },
+  })
+
+  const isRunning = runMutation.isPending || (runStatus?.running ?? false)
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -67,7 +119,45 @@ export function Shortlist() {
         subtitle={shortlist ? `${shortlist.trading_date} · ${shortlist.total_tradable} tradable of ${shortlist.total_candidates} candidates` : ''}
         onRefresh={() => refetch()}
         isRefreshing={isFetching}
+        actions={
+          <Button
+            variant="primary"
+            size="sm"
+            loading={isRunning}
+            disabled={isRunning}
+            icon={<Play className="h-3.5 w-3.5" />}
+            onClick={() => runMutation.mutate()}
+            title={
+              runStatus?.running
+                ? 'A shortlist run is already in progress'
+                : 'Run the same shortlist generation the scheduler runs at 16:30 IST'
+            }
+          >
+            {isRunning ? 'Running…' : 'Run Shortlist'}
+          </Button>
+        }
       />
+
+      {/* Toast — minimal inline implementation (no toast library installed) */}
+      {toast && (
+        <div className="fixed right-6 top-6 z-50">
+          <div
+            role="status"
+            className={`flex items-start gap-2 rounded-md border px-3 py-2 text-xs shadow-lg ${
+              toast.variant === 'success'
+                ? 'border-bull/40 bg-bull-muted text-bull'
+                : 'border-bear/40 bg-bear-muted text-bear'
+            }`}
+          >
+            {toast.variant === 'success' ? (
+              <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+            ) : (
+              <XCircle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+            )}
+            <span className="max-w-xs">{toast.message}</span>
+          </div>
+        </div>
+      )}
 
       <div className="p-6 space-y-4">
         {/* Summary row */}

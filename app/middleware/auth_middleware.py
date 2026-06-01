@@ -52,7 +52,7 @@ def _get_dev_user() -> User:
             role=UserRole.ADMIN,
             is_active=True,
         )
-    return _get_dev_user()
+    return _DEV_USER
 
 
 async def get_current_user(

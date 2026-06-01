@@ -33,7 +33,7 @@ class LivePositionRepository(BaseRepository[LivePosition]):
     async def upsert_by_position_id(self, position: LivePosition) -> LivePosition:
         try:
             position.mark_updated()
-            collection = LivePosition.get_motor_collection()
+            collection = LivePosition.get_pymongo_collection()
             doc = position.model_dump(exclude={"id"})
             await collection.update_one(
                 {"position_id": position.position_id},
@@ -52,7 +52,7 @@ class LivePositionRepository(BaseRepository[LivePosition]):
         if not positions:
             return 0
         try:
-            collection = LivePosition.get_motor_collection()
+            collection = LivePosition.get_pymongo_collection()
             ops = [
                 ReplaceOne(
                     {"position_id": p.position_id},

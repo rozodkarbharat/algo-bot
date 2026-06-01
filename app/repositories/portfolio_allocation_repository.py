@@ -26,7 +26,7 @@ class PortfolioAllocationRepository(BaseRepository[PortfolioAllocation]):
     async def upsert_by_signal_id(self, allocation: PortfolioAllocation) -> None:
         """Insert or replace the allocation row keyed by signal_id."""
         try:
-            collection = PortfolioAllocation.get_motor_collection()
+            collection = PortfolioAllocation.get_pymongo_collection()
             doc = allocation.model_dump(mode="python")
             doc.pop("id", None)
             await collection.update_one(

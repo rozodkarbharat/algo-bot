@@ -1,9 +1,15 @@
 """
 Daily shortlist API routes.
 
-GET /api/v1/shortlist/today          — Today's tradable shortlist
-GET /api/v1/shortlist/{date}         — Shortlist for a specific date
-GET /api/v1/shortlist/tradable-stocks — All stocks with tradable=True
+GET  /api/v1/shortlist/today           — Today's tradable shortlist
+POST /api/v1/shortlist/run             — Manually trigger a shortlist run
+GET  /api/v1/shortlist/status          — Current state of the run manager
+GET  /api/v1/shortlist/tradable-stocks — All stocks with tradable=True
+GET  /api/v1/shortlist/{date}          — Shortlist for a specific date
+
+Route declaration order matters: literal paths (/run, /status, /today,
+/tradable-stocks) MUST be declared before the dynamic /{target_date} or
+FastAPI will route "/run" to the date handler and fail to parse it as a date.
 
 Routes call services only — no direct repository or Beanie access here.
 """
@@ -11,10 +17,16 @@ Routes call services only — no direct repository or Beanie access here.
 from datetime import date
 from typing import Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Body, Query
 
-from app.schemas.strategy import ShortlistEntryResponse, ShortlistResponse
-from app.services.shortlist_service import ShortlistService
+from app.schemas.strategy import (
+    ShortlistEntryResponse,
+    ShortlistResponse,
+    ShortlistRunRequest,
+    ShortlistRunResponse,
+    ShortlistStatusResponse,
+)
+from app.services.shortlist_service import ShortlistService, shortlist_run_manager
 from app.utils.logger import get_logger
 from app.utils.trading_day import last_completed_trading_day
 
@@ -52,6 +64,56 @@ async def get_today_shortlist(
         probability_threshold=probability_threshold,
     )
     return _build_response(result)
+
+
+@router.post(
+    "/run",
+    response_model=ShortlistRunResponse,
+    summary="Manually trigger a shortlist run",
+)
+async def run_shortlist(
+    body: ShortlistRunRequest = Body(default_factory=ShortlistRunRequest),
+) -> ShortlistRunResponse:
+    """
+    Execute the same shortlist generation that the scheduler runs at 16:30 IST.
+
+    Behaviour:
+      * Reuses `ShortlistService.generate_shortlist()` via the shared
+        `shortlist_run_manager` — no duplicated business logic.
+      * Single-flight: a 409 Conflict is returned if another run is in progress
+        (whether triggered manually or by the scheduler).
+      * Defaults `target_date` to today's trading day when omitted.
+    """
+    result = await shortlist_run_manager.run(
+        target_date=body.target_date,
+        probability_threshold=body.probability_threshold,
+        trigger="manual",
+    )
+    return ShortlistRunResponse(
+        status="success",
+        target_date=result.target_date,
+        total_checked=result.total_candidates_checked,
+        total_shortlisted=len(result.entries),
+        duration_seconds=round(result.duration_seconds, 3),
+        threshold_pct=round(result.threshold_used * 100, 2),
+    )
+
+
+@router.get(
+    "/status",
+    response_model=ShortlistStatusResponse,
+    summary="Current shortlist run status",
+)
+async def get_shortlist_status() -> ShortlistStatusResponse:
+    """
+    Return the latest run-manager state — useful for UIs that need to:
+      * disable the "Run" button while a run is in flight, and
+      * display the last successful run's stats.
+
+    Reflects BOTH manual and scheduler runs since they share the manager.
+    """
+    snap = shortlist_run_manager.snapshot()
+    return ShortlistStatusResponse(**snap.to_dict())
 
 
 @router.get(

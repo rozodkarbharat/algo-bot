@@ -28,5 +28,8 @@ export const syncApi = {
     apiClient.get<SyncLogResponse>(`/api/v1/sync/logs/${symbol}`).then(extractData),
 
   status: () =>
-    apiClient.get<SyncStatusResponse>('/api/v1/sync/status').then(extractData),
+    apiClient
+      .get<{ total: number; by_status: SyncStatusResponse }>('/api/v1/sync/status')
+      .then(extractData)
+      .then((d) => d.by_status),
 }
