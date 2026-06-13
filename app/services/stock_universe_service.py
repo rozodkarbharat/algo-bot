@@ -21,6 +21,13 @@ Instrument tokens:
   Filter by: exchange="NSE", instrumenttype="EQ", and match the symbol name.
 """
 
+from dataclasses import dataclass, field
+
+from app.brokers.angelone.nse_index_constituents import (
+    NSEIndexConstituentsService,
+    nse_index_constituents,
+)
+from app.brokers.angelone.scrip_master import ScripMasterService, scrip_master
 from app.core.exceptions import DatabaseException
 from app.models.stock import Stock
 from app.repositories.stock_repository import StockRepository
@@ -88,6 +95,18 @@ _NIFTY50_STOCKS: list[dict] = [
 
 # ── Service ───────────────────────────────────────────────────────────────────
 
+
+@dataclass
+class SeedFromIndexResult:
+    """Outcome of seeding the universe from an NSE index list."""
+
+    index: str
+    total_symbols: int
+    inserted: int                          # newly created rows
+    updated: int                           # already existed; re-tagged with index
+    unmatched: list[str] = field(default_factory=list)  # symbols not in scrip master
+
+
 class StockUniverseService:
     """
     Manages the stock universe lifecycle.
@@ -98,8 +117,14 @@ class StockUniverseService:
       - Support future index expansions (NIFTY100, NIFTY200, custom)
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        scrip_master_svc: ScripMasterService | None = None,
+        nse_index_svc: NSEIndexConstituentsService | None = None,
+    ) -> None:
         self._repo = StockRepository()
+        self._scrip_master = scrip_master_svc or scrip_master
+        self._nse_index = nse_index_svc or nse_index_constituents
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -134,6 +159,141 @@ class StockUniverseService:
             index, inserted, len(stocks),
         )
         return inserted
+
+    async def seed_universe_from_index(
+        self,
+        index: str = "NIFTY500",
+        force_refresh: bool = False,
+    ) -> SeedFromIndexResult:
+        """
+        Seed the ``stocks`` collection from an NSE index list.
+
+        Two-pass strategy to dodge ``instrument_token`` unique-index collisions
+        that happen when stale tokens in the DB clash with fresh scrip-master
+        assignments:
+
+          • Pass 1 — update every already-known symbol with its current token
+            (this *frees* stale tokens that might otherwise be reused).
+          • Pass 2 — insert brand-new symbols. If a token is still held by an
+            existing row whose symbol does not match the scrip master, that
+            stale row is deactivated and its token cleared (with a ``__stale``
+            suffix to satisfy the unique index) so the new insert can succeed.
+
+        Idempotent: re-running just keeps everything in sync.
+        """
+        index = index.upper()
+        symbols = await self._nse_index.get_symbols(index, force_refresh=force_refresh)
+        if not symbols:
+            raise DatabaseException(
+                f"NSE returned no constituents for index '{index}'.",
+                detail="check upstream archives.nseindia.com CSV format",
+            )
+
+        token_map = await self._scrip_master.nse_equities()
+
+        unmatched: list[str] = []
+        resolved: list[tuple[str, str]] = []
+        for sym in symbols:
+            token = token_map.get(sym)
+            if token:
+                resolved.append((sym, token))
+            else:
+                unmatched.append(sym)
+
+        # ── Pass 1: refresh tokens / tags on existing rows ────────────────────
+        new_symbols: list[tuple[str, str]] = []
+        updated = 0
+        for sym, token in resolved:
+            existing = await self._repo.get_stock_by_symbol(sym)
+            if existing is None:
+                new_symbols.append((sym, token))
+                continue
+
+            touched = False
+            if existing.instrument_token != token:
+                existing.instrument_token = token
+                touched = True
+            if index not in existing.indices:
+                existing.indices = [*existing.indices, index]
+                touched = True
+            if not existing.is_active:
+                existing.is_active = True
+                touched = True
+            if touched:
+                existing.mark_updated()
+                await self._repo.save(existing)
+                updated += 1
+
+        # ── Pass 2: insert brand-new symbols, breaking stale token holds ─────
+        inserted = 0
+        conflicts: list[str] = []
+        for sym, token in new_symbols:
+            await self._displace_stale_token_holder(token, scrip_master_map=token_map)
+            try:
+                await self._repo.create_stock(
+                    Stock(
+                        symbol=sym,
+                        exchange="NSE",
+                        instrument_token=token,
+                        company_name=sym,
+                        indices=[index],
+                        sector=None,
+                        is_active=True,
+                    )
+                )
+                inserted += 1
+            except Exception as exc:  # noqa: BLE001 — best-effort per row
+                logger.warning("Failed to insert %s (token=%s): %s", sym, token, exc)
+                conflicts.append(sym)
+
+        logger.info(
+            "Universe seed from %s: %d inserted, %d updated, %d unmatched, %d conflicts (of %d).",
+            index, inserted, updated, len(unmatched), len(conflicts), len(symbols),
+        )
+        if unmatched:
+            preview = ", ".join(unmatched[:10])
+            logger.warning(
+                "%d symbols not found in Angel One scrip master (first 10: %s)",
+                len(unmatched), preview,
+            )
+
+        # Conflicts are reported alongside unmatched so the caller sees them.
+        return SeedFromIndexResult(
+            index=index,
+            total_symbols=len(symbols),
+            inserted=inserted,
+            updated=updated,
+            unmatched=unmatched + conflicts,
+        )
+
+    async def _displace_stale_token_holder(
+        self, token: str, scrip_master_map: dict[str, str]
+    ) -> None:
+        """
+        If some existing row holds ``token`` but the scrip master no longer
+        assigns it that token, mark that row stale so a new insert can claim
+        the token.
+
+        The token is rewritten to ``"<old>__stale_<symbol>"`` to preserve the
+        unique index, and ``is_active`` is set to ``False``.
+        """
+        holder = await Stock.find_one({"instrument_token": token})
+        if holder is None:
+            return
+        # If scrip master still assigns this symbol the same token, the row is
+        # current — nothing to do (the symbol update happened in Pass 1).
+        if scrip_master_map.get(holder.symbol.upper()) == token:
+            return
+
+        original = holder.instrument_token
+        holder.instrument_token = f"{original}__stale_{holder.symbol.upper()}"
+        holder.is_active = False
+        holder.mark_updated()
+        await self._repo.save(holder)
+        logger.info(
+            "Deactivated stale token holder %s (token %s → %s) to free token for new symbol.",
+            holder.symbol, original, holder.instrument_token,
+        )
 
     async def get_active_symbols(self, index: str | None = None) -> list[str]:
         """

@@ -228,3 +228,133 @@ class ORHVValidationSummaryResponse(BaseModel):
     insufficient_history: int
     failed_symbols: list[str]
     duration_seconds: float
+
+
+# ── Daily shortlist (UI) ──────────────────────────────────────────────────────
+
+class ORHVShortlistEntryResponse(BaseModel):
+    """One row on the ORHV shortlist tab — Phase 1 candidate + Phase 2 outcome."""
+
+    symbol: str
+    candidate_date: date = Field(..., description="Day D — two-sided breakout session")
+    execution_date: date = Field(..., description="Day D+1 — trading session")
+    orh_d: float
+    orl_d: float
+    orb_range_pct: float
+    win_rate: float = Field(..., description="Historical win rate 0.0–1.0")
+    win_rate_pct: float = Field(..., description="Win rate as percentage")
+    wins: int = 0
+    losses: int = 0
+    occurrences_used: int = 0
+    occurrences_available: int = 0
+    is_candidate: bool = Field(
+        False, description="True if the symbol passed Phase 1 (formed the ORHV pattern)"
+    )
+    tradable: bool = True
+    reason_skipped: Optional[str] = None
+
+
+class ORHVShortlistResponse(BaseModel):
+    """Full ORHV shortlist for an execution date (mirrors /shortlist/today envelope)."""
+
+    strategy_id: str = "opening_range_historical_validation"
+    strategy_name: str = "Opening Range Historical Validation"
+    trading_date: date = Field(..., description="Execution date (Day D+1)")
+    candidate_date: date = Field(..., description="Setup date (Day D)")
+    total_candidates: int
+    total_phase1_scanned: int = Field(
+        0,
+        description="Symbols with Phase 1 detection stored (candidates + rejected)",
+    )
+    total_tradable: int
+    threshold_win_rate_pct: float
+    generated_at: datetime
+    entries: list[ORHVShortlistEntryResponse]
+
+
+class ORHVShortlistRunRequest(BaseModel):
+    """Body for POST /api/v1/orhv/run."""
+
+    target_date: Optional[date] = Field(
+        default=None,
+        description="Execution date (Day D+1). Defaults to next trading day after last completed session.",
+    )
+    full_pipeline: bool = Field(
+        default=True,
+        description="If True, sync Day D candles from Angel One, then detect + validate.",
+    )
+    win_rate_threshold: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Optional UI filter override (0.0–1.0); stored validations use strategy defaults.",
+    )
+
+
+class ORHVShortlistRunResponse(BaseModel):
+    status: str
+    target_date: date
+    total_checked: int
+    total_shortlisted: int
+    duration_seconds: float
+    full_pipeline: bool = False
+    data_date: Optional[date] = None
+    candles_synced: Optional[int] = None
+    sync_failed_symbols: Optional[list[str]] = None
+    candidates_found: Optional[int] = None
+    validation_tradable: Optional[int] = None
+
+
+class ORHVShortlistStatusResponse(BaseModel):
+    running: bool
+    last_status: str
+    last_started_at: Optional[datetime] = None
+    last_finished_at: Optional[datetime] = None
+    last_target_date: Optional[date] = None
+    last_total_checked: int = 0
+    last_total_shortlisted: int = 0
+    last_duration_seconds: Optional[float] = None
+    last_error: Optional[str] = None
+    last_trigger: Optional[str] = None
+
+
+# ── Single-symbol tester ──────────────────────────────────────────────────────
+
+class ORHVSymbolRunRequest(BaseModel):
+    """Body for POST /api/v1/orhv/run-symbol."""
+
+    symbol: str = Field(..., description="NSE ticker symbol to test")
+    mode: str = Field(
+        default="full",
+        description="'full' = sync + detect + validate; 'phase2' = validate stored history only",
+    )
+    target_date: Optional[date] = Field(
+        default=None,
+        description="Execution date (Day D+1) for full mode, or candidate date (Day D) for phase2.",
+    )
+
+
+class ORHVSymbolRunResponse(BaseModel):
+    symbol: str
+    mode: str
+    candidate_date: date
+    execution_date: Optional[date] = None
+    has_phase1_setup: bool
+    is_candidate: bool
+    phase1_reason: Optional[str] = None
+    validated: bool
+    occurrences_available: int
+    occurrences_used: int
+    wins: int
+    losses: int
+    win_rate: float
+    win_rate_pct: float
+    tradable: bool
+    reason: Optional[str] = None
+    orh_d: Optional[float] = None
+    orl_d: Optional[float] = None
+    candles_synced: int
+    history_candle_days: int
+    history_detection_days: int
+    duration_seconds: float
+    message: str

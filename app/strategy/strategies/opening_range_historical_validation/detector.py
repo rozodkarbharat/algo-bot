@@ -5,7 +5,7 @@ Pure Python — NO database calls, NO I/O.
 Receives a single trading day's sorted 15-minute candles and determines
 whether the day qualifies as an ORHV setup candidate.
 
-Detection rules (applied strictly on CLOSED candles):
+Detection rules:
 
   Step 0 — Opening Range
     ORH_D = first candle (9:15–9:30 IST) HIGH
@@ -19,20 +19,21 @@ Detection rules (applied strictly on CLOSED candles):
     CL1 = first subsequent candle whose LOW < ORL_D
     CL1_Low = CL1.low
 
-  Step 3 — Condition A (close-based, no look-ahead bias)
-    Any candle AFTER CH1 whose CLOSE > CH1_High
+  Step 3 — Condition A (touch-based)
+    Any candle AFTER CH1 whose HIGH > CH1_High
 
-  Step 4 — Condition B (close-based, no look-ahead bias)
-    Any candle AFTER CL1 whose CLOSE < CL1_Low
+  Step 4 — Condition B (touch-based)
+    Any candle AFTER CL1 whose LOW < CL1_Low
 
   Candidate = Condition A met AND Condition B met
 
 Note on look-ahead:
   CH1/CL1 are identified by their HIGH/LOW (intra-bar touch is valid —
   this represents a market-order fill at the breakout level which a trader
-  would observe in real-time as the candle's printed high).
-  Conditions A and B require a CLOSE confirmation — this avoids acting on
-  an intra-bar wick that could reverse before the candle closes.
+  would observe in real-time as the candle's printed high/low).
+  Conditions A and B confirm continuation with the same intra-bar touch
+  semantics: a later candle only needs to trade through CH1_High (or
+  CL1_Low) — it does not have to close beyond the level.
 """
 
 from __future__ import annotations
@@ -76,14 +77,14 @@ class ORHVDetectionResult:
     cl1_low: Optional[float]
     cl1_time: Optional[datetime]
 
-    # ── Confirmation ──────────────────────────────────────────────────────────
+    # ── Confirmation (touch-based: high/low trades through the level) ───────────
     condition_a_met: bool
     condition_a_time: Optional[datetime]
-    condition_a_close: Optional[float]
+    condition_a_close: Optional[float]  # confirming candle HIGH (field name kept for compat)
 
     condition_b_met: bool
     condition_b_time: Optional[datetime]
-    condition_b_close: Optional[float]
+    condition_b_close: Optional[float]  # confirming candle LOW (field name kept for compat)
 
     # ── Verdict ───────────────────────────────────────────────────────────────
     is_candidate: bool
@@ -177,31 +178,32 @@ class ORHVSetupDetector:
         cond_b_time: Optional[datetime] = None
         cond_b_close: Optional[float] = None
 
-        # For Condition A we scan candles AFTER CH1 (not CH1 itself — close can't > own high)
-        # For Condition B we scan candles AFTER CL1
+        # For Condition A we scan candles AFTER CH1 (CH1's own high equals CH1_High,
+        # so it can never satisfy a strict ">" against itself).
+        # For Condition B we scan candles AFTER CL1.
         ch1_idx = rest.index(ch1_candle) if ch1_found else len(rest)
         cl1_idx = rest.index(cl1_candle) if cl1_found else len(rest)
 
         for i, c in enumerate(rest):
-            # Condition A: candle strictly after CH1 closes above CH1_High
+            # Condition A: candle strictly after CH1 trades above CH1_High (intra-bar touch)
             if (
                 ch1_found
                 and cond_a_close is None
                 and i > ch1_idx
-                and c.close > ch1_high  # type: ignore[operator]
+                and c.high > ch1_high  # type: ignore[operator]
             ):
                 cond_a_time = c.time
-                cond_a_close = c.close
+                cond_a_close = c.high
 
-            # Condition B: candle strictly after CL1 closes below CL1_Low
+            # Condition B: candle strictly after CL1 trades below CL1_Low (intra-bar touch)
             if (
                 cl1_found
                 and cond_b_close is None
                 and i > cl1_idx
-                and c.close < cl1_low  # type: ignore[operator]
+                and c.low < cl1_low  # type: ignore[operator]
             ):
                 cond_b_time = c.time
-                cond_b_close = c.close
+                cond_b_close = c.low
 
         condition_a_met = cond_a_close is not None
         condition_b_met = cond_b_close is not None
@@ -214,11 +216,11 @@ class ORHVSetupDetector:
             if not ch1_found:
                 parts.append("CH1 not found (ORH_D never breached)")
             elif not condition_a_met:
-                parts.append("Condition A not met (no close above CH1_High)")
+                parts.append("Condition A not met (no high above CH1_High)")
             if not cl1_found:
                 parts.append("CL1 not found (ORL_D never breached)")
             elif not condition_b_met:
-                parts.append("Condition B not met (no close below CL1_Low)")
+                parts.append("Condition B not met (no low below CL1_Low)")
             rejection_reason = "; ".join(parts) if parts else "Conditions not met."
 
         if is_candidate:

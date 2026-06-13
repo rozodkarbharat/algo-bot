@@ -22,6 +22,7 @@ from typing import Optional
 import httpx
 import pyotp
 
+from app.brokers.angelone.rate_limiter import angel_one_rate_limiter
 from app.config.settings import settings
 from app.core.exceptions import AngelOneAuthException, AngelOneAPIException
 from app.utils.logger import get_logger
@@ -108,6 +109,25 @@ class AngelOneAuth:
             self._session = None
         logger.info("AngelOne session cleared.")
 
+    async def invalidate_if_matches(self, session: "AngelOneSession") -> bool:
+        """
+        Atomically clear the cached session only if it is still the given `session`.
+
+        Used when a downstream API call observes a 401/403 with a specific JWT:
+        we want to evict that exact session so the next call re-logs in, but if
+        another concurrent caller has already replaced the cache with a fresh
+        session, we must leave that new session alone. Prevents the thundering
+        herd of every in-flight 403 clobbering each other's re-login result.
+
+        Returns True if the cache was cleared, False otherwise.
+        """
+        async with self._lock:
+            if self._session is session:
+                self._session = None
+                logger.info("AngelOne session invalidated (stale JWT observed).")
+                return True
+            return False
+
     # ── Internal ──────────────────────────────────────────────────────────────
 
     async def _login(self) -> None:
@@ -185,6 +205,8 @@ class AngelOneAuth:
         }
         if authenticated and current_session:
             headers["Authorization"] = f"Bearer {current_session.jwt_token}"
+
+        await angel_one_rate_limiter.acquire()
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             try:

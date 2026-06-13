@@ -2,6 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard,
   ListChecks,
+  Beaker,
   Zap,
   FlaskConical,
   TrendingUp,
@@ -23,6 +24,7 @@ import { ROLE_LABELS } from '@/types/auth'
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true },
   { to: '/shortlist', icon: ListChecks, label: 'Shortlist' },
+  { to: '/stock-tester', icon: Beaker, label: 'Stock Tester' },
   { to: '/live-signals', icon: Zap, label: 'Live Signals' },
   { to: '/paper-trading', icon: FlaskConical, label: 'Paper Trading' },
   { to: '/live-trading', icon: TrendingUp, label: 'Live Trading' },

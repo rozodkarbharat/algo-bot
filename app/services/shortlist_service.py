@@ -32,14 +32,26 @@ from app.repositories.one_side_day_repository import OneSideDayRepository
 from app.services.stock_universe_service import StockUniverseService
 from app.utils.logger import get_logger
 from app.utils.market_time import date_to_utc_midnight
-from app.utils.trading_day import get_previous_trading_day, last_completed_trading_day
+from app.utils.trading_day import (
+    get_previous_trading_day,
+    last_completed_trading_day,
+    upcoming_trading_session,
+)
 
 logger = get_logger(__name__)
 
 
 @dataclass
 class ShortlistEntry:
-    """A single tradable candidate on today's shortlist."""
+    """
+    A single candidate on today's shortlist.
+
+    Contains both *tradable* candidates (passing the probability + sample-size
+    bar) and *skipped* ones — UI consumers display the latter with a "Skipped"
+    badge plus `reason_skipped`, while the live signal engine filters down to
+    `tradable=True` before subscribing. Keeping rejects in the list lets the
+    operator see why a one-side stock didn't make the actionable cut.
+    """
 
     symbol: str
     direction: str                 # "UP" or "DOWN"
@@ -47,12 +59,28 @@ class ShortlistEntry:
     first_candle_low: float
     breakout_price: Optional[float]
     move_percent: Optional[float]   # yesterday's move (for context)
-    continuation_probability: float  # 0.0–1.0
-    total_occurrences: int          # historical sample size
+    continuation_probability: float  # 0.0–1.0 (0.0 if no continuation stat exists)
+    total_occurrences: int          # historical sample size (0 if no stat exists)
     yesterday_date: date
     # Multi-strategy identity (defaulted for backward compatibility)
     strategy_id: str = "one_side_orb"
     strategy_name: str = "One-Side ORB"
+    # Tradability — populated by generate_shortlist; defaults preserve the
+    # legacy "tradable-only" contract for any callers constructing entries
+    # directly.
+    tradable: bool = True
+    reason_skipped: Optional[str] = None
+
+
+@dataclass
+class ShortlistPipelineMetrics:
+    """Telemetry from the optional full-pipeline path (sync + detect + stats)."""
+
+    data_date: Optional[date] = None
+    candles_synced: int = 0
+    sync_failed_symbols: list[str] = field(default_factory=list)
+    osd_one_side_days: int = 0
+    tradable_symbols: int = 0
 
 
 @dataclass
@@ -67,14 +95,21 @@ class ShortlistResult:
     duration_seconds: float = 0.0
     strategy_id: str = "one_side_orb"
     strategy_name: str = "One-Side ORB"
+    pipeline_metrics: Optional[ShortlistPipelineMetrics] = None
+
+    def tradable_entries(self) -> list["ShortlistEntry"]:
+        """Subset of entries that passed all gating checks (probability + sample size)."""
+        return [e for e in self.entries if e.tradable]
 
     def to_dict(self) -> dict:
+        tradable = [e for e in self.entries if e.tradable]
         return {
             "target_date": self.target_date.isoformat(),
             "yesterday": self.yesterday.isoformat(),
             "strategy_id": self.strategy_id,
             "strategy_name": self.strategy_name,
             "total_candidates": len(self.entries),
+            "total_tradable": len(tradable),
             "total_checked": self.total_candidates_checked,
             "threshold": self.threshold_used,
             "duration_seconds": round(self.duration_seconds, 3),
@@ -90,6 +125,8 @@ class ShortlistResult:
                     "total_occurrences": e.total_occurrences,
                     "yesterday_date": e.yesterday_date.isoformat(),
                     "strategy_id": e.strategy_id,
+                    "tradable": e.tradable,
+                    "reason_skipped": e.reason_skipped,
                 }
                 for e in self.entries
             ],
@@ -131,7 +168,11 @@ class ShortlistService:
 
         Args:
             target_date: The trading day to generate a shortlist for.
-                         Defaults to today (the day we will actually trade).
+                         Defaults to the upcoming trading session (the day we
+                         are currently in or about to trade) so that a morning
+                         or in-session view/run targets *today's* tradable list
+                         rather than yesterday's. See
+                         ``upcoming_trading_session`` for the exact resolution.
             probability_threshold: Override the configured threshold.
             strategy_id: Strategy for which to generate the shortlist.
                          Currently only 'one_side_orb' uses OSD/continuation data;
@@ -141,7 +182,7 @@ class ShortlistService:
             ShortlistResult with all qualifying stocks and metadata.
         """
         t0 = time.monotonic()
-        effective_date = target_date or last_completed_trading_day()
+        effective_date = target_date or upcoming_trading_session()
         yesterday = get_previous_trading_day(effective_date)
         threshold = probability_threshold or settings.OSD_CONTINUATION_THRESHOLD
 
@@ -182,30 +223,55 @@ class ShortlistService:
             return result
 
         # Step 2: Look up continuation probability for each candidate.
+        # We build entries for EVERY one-side stock so the UI can show the
+        # rejected ones with a "Skipped" badge + reason. Tradability is
+        # decided per-entry; downstream consumers (live signal engine, etc.)
+        # filter by `tradable=True` before acting.
         entries: list[ShortlistEntry] = []
 
+        # Batch-fetch all continuation stats in a single query. Doing one
+        # get_by_symbol() per record is an N+1 pattern: against a remote
+        # cluster each lookup costs a full network round-trip (~80ms), so a
+        # high one-side-day count (e.g. 160+ stocks) blows past the request
+        # timeout. One $in query keeps this flat regardless of count.
+        stat_by_symbol = await self._cont_repo.get_by_symbols(
+            [osd.symbol for osd in one_side_records]
+        )
+
         for osd in one_side_records:
-            stat = await self._cont_repo.get_by_symbol(osd.symbol)
+            stat = stat_by_symbol.get(osd.symbol.upper())
+
+            tradable: bool
+            reason: Optional[str]
+            prob: float
+            occurrences: int
 
             if stat is None:
-                logger.debug(
-                    "[%s] No continuation stat found; skipping shortlist entry.", osd.symbol
-                )
-                continue
+                tradable = False
+                reason = "No continuation statistic available yet"
+                prob = 0.0
+                occurrences = 0
+                logger.debug("[%s] No continuation stat found; entry kept as skipped.", osd.symbol)
+            else:
+                prob = stat.continuation_probability
+                occurrences = stat.total_occurrences
 
-            if stat.continuation_probability < threshold:
-                logger.debug(
-                    "[%s] Probability %.1f%% < threshold %.1f%%; excluded.",
-                    osd.symbol,
-                    stat.continuation_probability * 100,
-                    threshold * 100,
-                )
-                continue
-
-            if not stat.tradable:
-                # Double-check: tradable flag incorporates both threshold AND min_occurrences.
-                logger.debug("[%s] tradable=False (insufficient sample size); excluded.", osd.symbol)
-                continue
+                if prob < threshold:
+                    tradable = False
+                    reason = (
+                        f"Probability {prob * 100:.1f}% below threshold "
+                        f"{threshold * 100:.1f}%"
+                    )
+                elif not stat.tradable:
+                    # `stat.tradable` already incorporates min-occurrences; surface
+                    # that distinct reason rather than the generic threshold copy.
+                    tradable = False
+                    reason = (
+                        f"Insufficient sample size ({occurrences} occurrences)"
+                    )
+                else:
+                    tradable = True
+                    reason = None
 
             entries.append(
                 ShortlistEntry(
@@ -215,23 +281,131 @@ class ShortlistService:
                     first_candle_low=osd.first_candle_low,
                     breakout_price=osd.breakout_price,
                     move_percent=osd.move_percent,
-                    continuation_probability=stat.continuation_probability,
-                    total_occurrences=stat.total_occurrences,
+                    continuation_probability=prob,
+                    total_occurrences=occurrences,
                     yesterday_date=yesterday,
                     strategy_id=strategy_id,
                     strategy_name=strat_name,
+                    tradable=tradable,
+                    reason_skipped=reason,
                 )
             )
 
-        # Step 3: Sort by probability descending (highest edge first).
-        entries.sort(key=lambda e: e.continuation_probability, reverse=True)
+        # Step 3: Sort tradable-first (highest edge first), then skipped rows
+        # (also by probability desc) so the actionable picks always appear at
+        # the top of the table without needing a UI-side filter.
+        entries.sort(
+            key=lambda e: (not e.tradable, -e.continuation_probability),
+        )
         result.entries = entries
         result.duration_seconds = time.monotonic() - t0
 
+        tradable_count = sum(1 for e in entries if e.tradable)
         logger.info(
-            "Shortlist for %s: %d tradable candidates (%.1fs)",
-            effective_date, len(entries), result.duration_seconds,
+            "Shortlist for %s: %d tradable / %d candidates (%.1fs)",
+            effective_date, tradable_count, len(entries), result.duration_seconds,
         )
+        return result
+
+    async def run_full_pipeline(
+        self,
+        target_date: Optional[date] = None,
+        probability_threshold: Optional[float] = None,
+        strategy_id: str = "one_side_orb",
+    ) -> ShortlistResult:
+        """
+        End-to-end fallback pipeline used by `POST /api/v1/shortlist/run` when
+        the daily scheduler chain (15:45 sync / 16:00 OSD / 16:15 stats / 16:30
+        shortlist) has not run.
+
+        This is the manual-recovery path: if the previous evening's scheduled
+        run was missed, an operator can trigger this the next morning (pre-market
+        or intraday) to build the current session's shortlist on demand. With
+        no `target_date`, it targets `upcoming_trading_session()` and pulls the
+        already-complete previous session's candles as `data_date`.
+
+        Steps for `data_date = previous trading day of target_date`:
+          1. Fetch 15-min candles for `data_date` from Angel One (via
+             `HistoricalDataService.sync_historical_data`).
+          2. Run OSD detection for `data_date`.
+          3. Recompute continuation statistics for all active stocks.
+          4. Generate the shortlist for `target_date` (delegates to
+             `generate_shortlist`).
+
+        The composed `ShortlistResult` carries a `pipeline_metrics` payload so
+        callers can surface what was actually fetched/detected.
+        """
+        # Local imports keep this method optional and avoid import cycles.
+        from app.services.historical_data_service import HistoricalDataService
+        from app.services.strategy_service import StrategyService
+        from app.utils.candle_intervals import CandleInterval
+
+        effective_target = target_date or upcoming_trading_session()
+        data_date = get_previous_trading_day(effective_target)
+
+        logger.info(
+            "Shortlist full pipeline starting: target=%s data_date=%s strategy=%s",
+            effective_target, data_date, strategy_id,
+        )
+
+        metrics = ShortlistPipelineMetrics(data_date=data_date)
+
+        # Step 1: Pull candles for data_date from Angel One.
+        try:
+            data_svc = HistoricalDataService()
+            sync_result = await data_svc.sync_historical_data(
+                from_date=data_date,
+                to_date=data_date,
+                interval=CandleInterval.FIFTEEN_MINUTE,
+            )
+            metrics.candles_synced = sync_result.records_inserted
+            metrics.sync_failed_symbols = list(sync_result.failed_symbols)
+            logger.info(
+                "Pipeline sync for %s: %d ok / %d skipped / %d failed | %d buckets",
+                data_date,
+                sync_result.successful,
+                sync_result.skipped,
+                sync_result.failed,
+                sync_result.records_inserted,
+            )
+        except Exception as exc:
+            # Don't abort the pipeline on sync issues — the DB may already have
+            # the data. Surface the error in metrics for visibility.
+            logger.error("Pipeline sync step failed: %s", exc, exc_info=True)
+            metrics.sync_failed_symbols.append(f"__sync_step__: {exc}")
+
+        # Step 2: OSD detection for data_date.
+        strategy_svc = StrategyService(strategy_id=strategy_id)
+        try:
+            detection = await strategy_svc.run_detection_for_date(
+                trading_date=data_date,
+            )
+            metrics.osd_one_side_days = detection.one_side_days
+            logger.info(
+                "Pipeline OSD detection for %s: %d one-side / %d records written",
+                data_date, detection.one_side_days, detection.records_written,
+            )
+        except Exception as exc:
+            logger.error("Pipeline OSD detection failed: %s", exc, exc_info=True)
+
+        # Step 3: Recompute continuation stats for the universe.
+        try:
+            prob = await strategy_svc.calculate_all_continuation_stats()
+            metrics.tradable_symbols = prob.tradable_symbols
+            logger.info(
+                "Pipeline probability update: %d tradable / %d total",
+                prob.tradable_symbols, prob.total_symbols,
+            )
+        except Exception as exc:
+            logger.error("Pipeline probability update failed: %s", exc, exc_info=True)
+
+        # Step 4: Generate the shortlist using the freshly-updated DB.
+        result = await self.generate_shortlist(
+            target_date=effective_target,
+            probability_threshold=probability_threshold,
+            strategy_id=strategy_id,
+        )
+        result.pipeline_metrics = metrics
         return result
 
     async def get_tradable_stocks(self) -> list[ContinuationStatistic]:
@@ -300,7 +474,7 @@ class ShortlistRunSnapshot:
 
 class ShortlistRunManager:
     """Process-wide single-flight runner for shortlist generation."""
-
+    
     def __init__(self, service: Optional[ShortlistService] = None) -> None:
         self._service = service or ShortlistService()
         self._lock = asyncio.Lock()
@@ -318,11 +492,17 @@ class ShortlistRunManager:
         target_date: Optional[date] = None,
         probability_threshold: Optional[float] = None,
         trigger: str = "manual",
+        full_pipeline: bool = False,
     ) -> ShortlistResult:
         """
         Execute one shortlist generation. Raises ConflictException if another
-        run is already in flight. Reuses `ShortlistService.generate_shortlist()`
-        — no business logic lives here.
+        run is already in flight.
+
+        If `full_pipeline=True`, runs the end-to-end fallback chain
+        (Angel One sync → OSD detection → probability update → shortlist).
+        Otherwise calls `ShortlistService.generate_shortlist()` directly,
+        which is a fast read against MongoDB and the path used by the
+        16:30 IST scheduler job.
         """
         if self._state.running:
             raise ConflictException(
@@ -350,10 +530,16 @@ class ShortlistRunManager:
                 last_trigger=trigger,
             )
             try:
-                result = await self._service.generate_shortlist(
-                    target_date=target_date,
-                    probability_threshold=probability_threshold,
-                )
+                if full_pipeline:
+                    result = await self._service.run_full_pipeline(
+                        target_date=target_date,
+                        probability_threshold=probability_threshold,
+                    )
+                else:
+                    result = await self._service.generate_shortlist(
+                        target_date=target_date,
+                        probability_threshold=probability_threshold,
+                    )
                 self._state = ShortlistRunSnapshot(
                     running=False,
                     last_status="success",
@@ -361,7 +547,7 @@ class ShortlistRunManager:
                     last_finished_at=datetime.now(timezone.utc),
                     last_target_date=result.target_date,
                     last_total_checked=result.total_candidates_checked,
-                    last_total_shortlisted=len(result.entries),
+                    last_total_shortlisted=sum(1 for e in result.entries if e.tradable),
                     last_duration_seconds=result.duration_seconds,
                     last_trigger=trigger,
                 )

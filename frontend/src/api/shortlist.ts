@@ -8,6 +8,7 @@ import type {
 export interface ShortlistRunParams {
   target_date?: string
   probability_threshold?: number
+  full_pipeline?: boolean
 }
 
 export const shortlistApi = {
@@ -27,7 +28,11 @@ export const shortlistApi = {
 
   run: (params: ShortlistRunParams = {}) =>
     apiClient
-      .post<ShortlistRunResponse>('/api/v1/shortlist/run', params)
+      .post<ShortlistRunResponse>('/api/v1/shortlist/run', params, {
+        // Full-pipeline runs (Angel One sync + OSD + stats + shortlist) can
+        // take 1–3 minutes for 50 symbols. Override the default 30s timeout.
+        timeout: 600_000,
+      })
       .then(extractData),
 
   status: () =>

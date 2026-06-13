@@ -299,11 +299,14 @@ class ORHVHistoricalValidator:
         for c in candles[1:]:
             if not self._in_entry_window(c):
                 continue
-            if c.close > orh:
+            # Touch-based breakout: a candle that trades through ORH/ORL triggers
+            # entry (no close confirmation required). LONG takes priority when a
+            # single candle straddles both levels.
+            if c.high > orh:
                 entry_candle = c
                 trade_side = "LONG"
                 break
-            if c.close < orl:
+            if c.low < orl:
                 entry_candle = c
                 trade_side = "SHORT"
                 break

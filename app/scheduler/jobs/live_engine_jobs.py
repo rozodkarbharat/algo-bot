@@ -41,8 +41,10 @@ async def live_market_open_init() -> None:
 
         shortlist_svc = ShortlistService()
         shortlist = await shortlist_svc.generate_shortlist()
+        tradable_count = sum(1 for e in shortlist.entries if e.tradable)
         logger.info(
-            "Live init: shortlist has %d candidates for %s; engine.running=%s",
+            "Live init: shortlist has %d tradable / %d candidates for %s; engine.running=%s",
+            tradable_count,
             len(shortlist.entries),
             shortlist.target_date,
             live_signal_service.engine.running,

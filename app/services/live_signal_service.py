@@ -142,7 +142,12 @@ class LiveSignalService:
 
         trading_date = target_date or self._session.current_trading_date()
         shortlist = await self._shortlist_svc.generate_shortlist(target_date=trading_date)
-        candidates = [_entry_to_candidate(e) for e in shortlist.entries]
+        # The shortlist now contains both tradable and skipped rows (skipped
+        # rows are surfaced in the UI with a reason); only tradable ones get
+        # subscribed in the live engine.
+        candidates = [
+            _entry_to_candidate(e) for e in shortlist.entries if e.tradable
+        ]
 
         await self._engine.start(candidates)
         self._started_at = now_utc()

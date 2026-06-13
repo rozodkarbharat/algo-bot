@@ -40,6 +40,14 @@ class ORHVValidationRepository(BaseRepository[ORHVValidationRecord]):
             ORHVValidationRecord.tradable == True,
         ).to_list()
 
+    async def get_for_candidate_date(
+        self, candidate_date: datetime
+    ) -> list[ORHVValidationRecord]:
+        """Return all Phase 2 validation rows for setups detected on candidate_date (Day D)."""
+        return await ORHVValidationRecord.find(
+            ORHVValidationRecord.candidate_date == candidate_date,
+        ).to_list()
+
     async def get_recent_for_symbol(
         self, symbol: str, limit: int = 30
     ) -> list[ORHVValidationRecord]:

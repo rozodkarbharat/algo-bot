@@ -6,6 +6,7 @@ export interface ListStocksParams {
   page_size?: number
   index?: string
   active_only?: boolean
+  search?: string
 }
 
 export interface GetCandlesParams {

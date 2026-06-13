@@ -254,11 +254,11 @@ class ORHVSignalGenerator:
 
         assert state.orh is not None and state.orl is not None
 
-        # ── First breakout → signal ───────────────────────────────────────────
+        # ── First breakout → signal (touch-based: high/low trades through ORH/ORL) ─
         signal_type: Optional[str] = None
-        if candle.close > state.orh:
+        if candle.high > state.orh:
             signal_type = "BUY"
-        elif candle.close < state.orl:
+        elif candle.low < state.orl:
             signal_type = "SELL"
 
         if signal_type is None:

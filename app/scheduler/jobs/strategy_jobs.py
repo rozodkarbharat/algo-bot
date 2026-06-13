@@ -5,6 +5,7 @@ Jobs defined here:
   daily_osd_detection         — 4:00 PM IST (after EOD candle sync at 3:45 PM)
   daily_probability_update    — 4:15 PM IST (after OSD detection)
   daily_shortlist_generation  — 4:30 PM IST (after probability update)
+  daily_orhv_shortlist        — 4:35 PM IST (after One-Side shortlist)
 
 Schedule rationale:
   3:45 PM — EOD candle sync fetches today's 15-min candles (market_data_jobs)
@@ -115,7 +116,9 @@ async def daily_shortlist_generation() -> None:
         next_trading_day = get_next_trading_day(last_completed_trading_day())
         try:
             result = await shortlist_run_manager.run(
-                target_date=next_trading_day, trigger="scheduler"
+                target_date=next_trading_day,
+                trigger="scheduler",
+                full_pipeline=False,
             )
         except ConflictException:
             logger.warning(
@@ -123,18 +126,20 @@ async def daily_shortlist_generation() -> None:
             )
             return
 
+        tradable_entries = [e for e in result.entries if e.tradable]
         logger.info(
-            "=== Shortlist for %s: %d candidates from %d one-side stocks | %.3fs ===",
+            "=== Shortlist for %s: %d tradable / %d candidates from %d one-side stocks | %.3fs ===",
             next_trading_day,
+            len(tradable_entries),
             len(result.entries),
             result.total_candidates_checked,
             result.duration_seconds,
         )
 
-        if result.entries:
+        if tradable_entries:
             symbols = [
                 f"{e.symbol}({e.direction},{e.continuation_probability:.0%})"
-                for e in result.entries
+                for e in tradable_entries
             ]
             logger.info("Shortlist candidates: %s", ", ".join(symbols))
         else:
@@ -143,6 +148,48 @@ async def daily_shortlist_generation() -> None:
     except Exception as exc:
         logger.error(
             "Daily shortlist generation job failed with unhandled error: %s", exc, exc_info=True
+        )
+
+
+# ── Job 4: Daily ORHV Shortlist ───────────────────────────────────────────────
+
+async def daily_orhv_shortlist() -> None:
+    """
+    Run ORHV Phase 1 + 2 for today's session and build tomorrow's tradable list.
+
+    Triggered: daily at 16:35 IST (Monday–Friday), after One-Side shortlist.
+    Uses ORHVRunManager for single-flight consistency with manual POST /orhv/run.
+    """
+    logger.info("=== Daily ORHV Shortlist job started ===")
+    try:
+        from app.core.exceptions import ConflictException
+        from app.services.orhv_service import orhv_run_manager
+        from app.utils.trading_day import get_next_trading_day
+
+        execution_date = get_next_trading_day(last_completed_trading_day())
+        try:
+            result = await orhv_run_manager.run(
+                target_date=execution_date,
+                trigger="scheduler",
+                full_pipeline=True,
+            )
+        except ConflictException:
+            logger.warning(
+                "Skipping scheduled ORHV run — another ORHV run is already in progress."
+            )
+            return
+
+        tradable = sum(1 for e in result.entries if e.tradable)
+        logger.info(
+            "=== ORHV shortlist for %s: %d tradable / %d candidates | %.3fs ===",
+            execution_date,
+            tradable,
+            len(result.entries),
+            result.duration_seconds,
+        )
+    except Exception as exc:
+        logger.error(
+            "Daily ORHV shortlist job failed with unhandled error: %s", exc, exc_info=True
         )
 
 
@@ -193,3 +240,15 @@ def register_strategy_jobs(scheduler) -> None:  # type: ignore[type-arg]
         replace_existing=True,
     )
     logger.info("Registered job: daily_shortlist_generation (Mon–Fri 16:30 IST)")
+
+    scheduler.add_job(
+        daily_orhv_shortlist,
+        trigger="cron",
+        day_of_week="mon-fri",
+        hour=16,
+        minute=35,
+        id="daily_orhv_shortlist",
+        name="Daily ORHV Shortlist",
+        replace_existing=True,
+    )
+    logger.info("Registered job: daily_orhv_shortlist (Mon–Fri 16:35 IST)")

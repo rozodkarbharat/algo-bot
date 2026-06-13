@@ -220,19 +220,42 @@ def test_candle_count_is_correct(detector):
 
 
 def test_condition_candle_must_be_after_ch1(detector):
-    """The same candle as CH1 cannot satisfy Condition A (close can't > own high)."""
+    """The CH1 candle itself cannot satisfy Condition A (its high == CH1_High, strict >)."""
     orb = _orb_candle(high=110, low=100)
-    # CH1 candle has high=115 but close=113 (< 115) — so no Condition A on this candle
+    # CH1 candle has high=115 — equals CH1_High, so strict ">" excludes it.
     candles = [
         orb,
         _candle(108, 115, 95, 113, 4, 15),  # CH1 (high=115); CL1 (low=95)
-        # No subsequent candle closes above 115
+        # No subsequent candle trades above 115
         _candle(110, 112, 96, 111, 4, 30),
-        # Condition B only
+        # Condition B only (low 88 < 95)
         _candle(105, 108, 88, 87, 5, 0),
     ]
     result = detector.detect(candles)
-    # Condition A not met (no candle AFTER CH1 closes above 115)
+    # Condition A not met (no candle AFTER CH1 has a high above 115)
     assert not result.condition_a_met
     assert result.condition_b_met
     assert not result.is_candidate
+
+
+def test_conditions_met_on_touch_without_close(detector):
+    """Touch-based: a later candle that wicks past CH1_High / CL1_Low but closes
+    back inside still satisfies Conditions A and B."""
+    orb = _orb_candle(high=110, low=100)
+    candles = [
+        orb,
+        _candle(108, 115, 99, 108, 4, 15),   # CH1 (high=115>110); CL1 (low=99<100)
+        # Cond A: high=120 > 115 but close=113 (< 115) → would FAIL old close-based rule
+        _candle(114, 120, 112, 113, 4, 30),
+        # Cond B: low=90 < 99 but close=105 (> 99) → would FAIL old close-based rule
+        _candle(110, 112, 90, 105, 5, 0),
+    ]
+    result = detector.detect(candles)
+    assert result.ch1_found
+    assert result.cl1_found
+    assert result.condition_a_met
+    assert result.condition_b_met
+    assert result.is_candidate
+    # Confirmation values now record the touching high/low, not the close
+    assert result.condition_a_close == 120.0
+    assert result.condition_b_close == 90.0

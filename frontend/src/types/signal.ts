@@ -20,6 +20,7 @@ export interface ShortlistEntry {
 
 export interface ShortlistResponse {
   trading_date: string
+  yesterday?: string
   entries: ShortlistEntry[]
   total_candidates: number
   total_tradable: number
@@ -33,6 +34,13 @@ export interface ShortlistRunResponse {
   total_shortlisted: number
   duration_seconds: number
   threshold_pct: number
+
+  full_pipeline?: boolean
+  data_date?: string | null
+  candles_synced?: number | null
+  sync_failed_symbols?: string[] | null
+  osd_one_side_days?: number | null
+  tradable_symbols?: number | null
 }
 
 export interface ShortlistStatusResponse {

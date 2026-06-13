@@ -4,6 +4,7 @@ import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
 import { Login } from '@/pages/Login'
 import { Dashboard } from '@/pages/Dashboard'
 import { Shortlist } from '@/pages/Shortlist'
+import { StockTester } from '@/pages/StockTester'
 import { LiveSignals } from '@/pages/LiveSignals'
 import { PaperTrading } from '@/pages/PaperTrading'
 import { LiveTrading } from '@/pages/LiveTrading'
@@ -29,6 +30,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Dashboard /> },
       { path: 'shortlist', element: <Shortlist /> },
+      { path: 'stock-tester', element: <StockTester /> },
       { path: 'live-signals', element: <LiveSignals /> },
       {
         path: 'paper-trading',

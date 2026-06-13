@@ -78,20 +78,24 @@ class ORHVSetup(Document):
     ch1_high: Optional[float] = Field(default=None, description="CH1.high — the new upper level")
     ch1_time: Optional[datetime] = Field(default=None, description="Timestamp of CH1 candle")
 
-    # Condition A: a LATER candle closes ABOVE ch1_high
+    # Condition A: a LATER candle's HIGH trades ABOVE ch1_high (intra-bar touch)
     condition_a_met: bool = Field(default=False)
     condition_a_time: Optional[datetime] = Field(default=None)
-    condition_a_close: Optional[float] = Field(default=None, description="Close that confirmed A")
+    condition_a_close: Optional[float] = Field(
+        default=None, description="Confirming candle HIGH (field name kept for compatibility)"
+    )
 
     # ── CL1 — first candle whose LOW falls below ORL_D ────────────────────────
     cl1_found: bool = Field(default=False)
     cl1_low: Optional[float] = Field(default=None, description="CL1.low — the new lower level")
     cl1_time: Optional[datetime] = Field(default=None, description="Timestamp of CL1 candle")
 
-    # Condition B: a LATER candle closes BELOW cl1_low
+    # Condition B: a LATER candle's LOW trades BELOW cl1_low (intra-bar touch)
     condition_b_met: bool = Field(default=False)
     condition_b_time: Optional[datetime] = Field(default=None)
-    condition_b_close: Optional[float] = Field(default=None, description="Close that confirmed B")
+    condition_b_close: Optional[float] = Field(
+        default=None, description="Confirming candle LOW (field name kept for compatibility)"
+    )
 
     # ── Result ────────────────────────────────────────────────────────────────
     is_candidate: bool = Field(default=False, description="True when both A and B are met")

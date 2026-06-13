@@ -176,6 +176,44 @@ class HistoricalCandleRepository(BaseRepository[HistoricalCandle]):
                 f"Failed to fetch latest candle date for {symbol}.", detail=str(exc)
             )
 
+    async def get_distinct_dates(
+        self,
+        interval: str,
+        from_date: datetime,
+        to_date: datetime,
+        symbols: Optional[list[str]] = None,
+    ):
+        """
+        Return the set of distinct trading dates (as date objects) that have
+        candle data within [from_date, to_date].
+
+        When ``symbols`` is given, only those symbols are considered; otherwise
+        any symbol counts. Used by the ORHV history guard to detect which trading
+        days still need a candle sync from the broker.
+        """
+        from datetime import date as _date
+
+        try:
+            collection = HistoricalCandle.get_pymongo_collection()
+            query: dict = {
+                "interval": interval,
+                "trading_date": {"$gte": from_date, "$lte": to_date},
+            }
+            if symbols:
+                query["symbol"] = {"$in": [s.upper() for s in symbols]}
+            raw = await collection.distinct("trading_date", query)
+            result: set[_date] = set()
+            for dt in raw:
+                if isinstance(dt, datetime):
+                    result.add(dt.date())
+                elif isinstance(dt, _date):
+                    result.add(dt)
+            return result
+        except Exception as exc:
+            raise DatabaseException(
+                "Failed to fetch distinct candle dates.", detail=str(exc)
+            )
+
     async def get_existing_dates(
         self,
         symbol: str,

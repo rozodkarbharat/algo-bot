@@ -67,6 +67,10 @@ class Settings(BaseSettings):
     # ── Logging ───────────────────────────────────────────────────────────────
     LOG_LEVEL: str = Field(default="INFO", description="Root log level")
     LOG_DIR: str = Field(default="logs", description="Directory for log files")
+    CACHE_DIR: str = Field(
+        default="logs/cache",
+        description="On-disk cache (scrip master, NSE index CSVs, etc.)",
+    )
 
     # ── Scheduler ─────────────────────────────────────────────────────────────
     SCHEDULER_TIMEZONE: str = Field(
@@ -78,13 +82,23 @@ class Settings(BaseSettings):
         default="https://apiconnect.angelone.in",
         description="Angel One SmartAPI base URL",
     )
-    # Seconds to wait between consecutive Angel One API calls (rate-limit guard).
+    # Minimum spacing between Angel One HTTP calls (floor; see rate caps below).
     INGESTION_API_DELAY_SECONDS: float = Field(
-        default=0.5, description="Delay between Angel One API calls in seconds"
+        default=0.5, description="Minimum delay between Angel One API calls in seconds"
+    )
+    # SmartAPI published caps are ~3 req/s and ~180 req/min; defaults stay below that.
+    ANGELONE_API_RATE_PER_SECOND: float = Field(
+        default=2.5,
+        description="Max Angel One API requests per second (process-wide)",
+    )
+    ANGELONE_API_RATE_PER_MINUTE: int = Field(
+        default=150,
+        description="Max Angel One API requests per rolling minute (process-wide)",
     )
     # Max symbols processed in parallel during historical ingestion.
     INGESTION_CONCURRENCY: int = Field(
-        default=3, description="Concurrent symbols during historical data ingestion"
+        default=2,
+        description="Concurrent symbols during historical data ingestion",
     )
     # Default historical fetch start date (ISO: YYYY-MM-DD).
     INGESTION_DEFAULT_START_DATE: str = Field(
@@ -115,6 +129,24 @@ class Settings(BaseSettings):
     OSD_MIN_OCCURRENCES: int = Field(
         default=10,
         description="Minimum one-side occurrences required for tradable=True",
+    )
+
+    # ── Strategy Engine — ORHV (Opening Range Historical Validation) ───────────
+    # When True, the ORHV full pipeline ensures candle history is present for the
+    # lookback window (syncing missing days from Angel One and running Phase 1
+    # detection) BEFORE running Phase 2 validation. Prevents "0 prior occurrences"
+    # when the database has insufficient history.
+    ORHV_AUTO_BACKFILL_ENABLED: bool = Field(
+        default=True,
+        description="Auto-fetch + detect missing ORHV history before validation",
+    )
+    # Calendar-day lookback window the guard ensures coverage for. Larger windows
+    # give Phase 2 more prior occurrences but make the FIRST backfill heavy
+    # (~500 stocks × trading days). After the initial backfill, only new days are
+    # synced/detected, so subsequent runs are cheap.
+    ORHV_HISTORY_LOOKBACK_DAYS: int = Field(
+        default=365,
+        description="Calendar-day lookback the ORHV history guard backfills",
     )
 
     # ── Backtesting Engine ────────────────────────────────────────────────────

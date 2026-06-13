@@ -28,6 +28,7 @@ from typing import Optional
 import httpx
 
 from app.brokers.angelone.auth import angel_one_auth
+from app.brokers.angelone.rate_limiter import angel_one_rate_limiter
 from app.config.settings import settings
 from app.core.exceptions import AngelOneAPIException, RateLimitException
 from app.models.historical_candle import CandleData
@@ -49,6 +50,18 @@ HISTORICAL_DATA_PATH = "/rest/secure/angelbroking/historical/v1/getCandleData"
 _MAX_RETRIES = 3
 _RETRY_DELAY_BASE = 2.0  # seconds, doubles each retry
 
+# Substrings Angel One uses in a 403 body when the cause is rate-limiting
+# rather than an invalid/stale JWT. Matched case-insensitively.
+_RATE_LIMIT_BODY_MARKERS = ("exceeding access rate", "access rate", "rate limit")
+
+
+def _is_rate_limit_body(body: Optional[str]) -> bool:
+    """True if a 403 response body indicates rate-limiting (not a stale JWT)."""
+    if not body:
+        return False
+    lowered = body.lower()
+    return any(marker in lowered for marker in _RATE_LIMIT_BODY_MARKERS)
+
 
 class AngelOneHistoricalClient:
     """
@@ -60,9 +73,6 @@ class AngelOneHistoricalClient:
       - Enforces inter-request delays (rate-limit guard)
       - Parses raw API response into CandleData objects
     """
-
-    def __init__(self) -> None:
-        self._delay = settings.INGESTION_API_DELAY_SECONDS
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -108,10 +118,6 @@ class AngelOneHistoricalClient:
             )
             all_candles.extend(chunk_candles)
 
-            # Rate-limit guard — pause between API calls.
-            if len(chunks) > 1:
-                await asyncio.sleep(self._delay)
-
         # De-duplicate and sort (Angel One occasionally returns overlapping candles at boundaries).
         seen: set[datetime] = set()
         unique: list[CandleData] = []
@@ -153,21 +159,36 @@ class AngelOneHistoricalClient:
         for attempt in range(1, _MAX_RETRIES + 1):
             try:
                 return await self._call_api(payload, symbol)
-            except RateLimitException:
-                raise  # never retry a 429 — caller should back off
+            except RateLimitException as exc:
+                # The limiter was already paused inside _call_api, so the next
+                # acquire() will block until the cooldown expires. Retry the
+                # chunk instead of dropping the symbol entirely.
+                last_exc = exc
+                if attempt < _MAX_RETRIES:
+                    logger.warning(
+                        "[%s] Rate-limited (attempt %d/%d); will retry after cooldown.",
+                        symbol, attempt, _MAX_RETRIES,
+                    )
+                    continue
+                logger.error(
+                    "[%s] Rate-limited; retries exhausted for chunk %s–%s.",
+                    symbol, from_date, to_date,
+                )
             except AngelOneAPIException as exc:
                 last_exc = exc
+                detail = getattr(exc, "detail", None)
+                detail_suffix = f" | response: {detail}" if detail else ""
                 if attempt < _MAX_RETRIES:
                     wait = _RETRY_DELAY_BASE * (2 ** (attempt - 1))
                     logger.warning(
-                        "[%s] API error (attempt %d/%d), retrying in %.1fs: %s",
-                        symbol, attempt, _MAX_RETRIES, wait, exc,
+                        "[%s] API error (attempt %d/%d), retrying in %.1fs: %s%s",
+                        symbol, attempt, _MAX_RETRIES, wait, exc, detail_suffix,
                     )
                     await asyncio.sleep(wait)
                 else:
                     logger.error(
-                        "[%s] All %d retries exhausted for chunk %s–%s.",
-                        symbol, _MAX_RETRIES, from_date, to_date,
+                        "[%s] All %d retries exhausted for chunk %s–%s: %s%s",
+                        symbol, _MAX_RETRIES, from_date, to_date, exc, detail_suffix,
                     )
             except Exception as exc:
                 last_exc = exc
@@ -183,6 +204,8 @@ class AngelOneHistoricalClient:
 
     async def _call_api(self, payload: dict, symbol: str) -> list[CandleData]:
         """Execute a single POST to the getCandleData endpoint."""
+        await angel_one_rate_limiter.acquire()
+
         session = await angel_one_auth.get_session()
         url = f"{settings.ANGELONE_BASE_URL}{HISTORICAL_DATA_PATH}"
         headers = session.auth_headers(settings.ANGELONE_API_KEY)
@@ -196,7 +219,43 @@ class AngelOneHistoricalClient:
                 raise AngelOneAPIException(f"Network error for {symbol}", detail=str(exc))
 
         if response.status_code == 429:
-            raise RateLimitException(source="AngelOne API", retry_after=60)
+            retry_after = 60
+            await angel_one_rate_limiter.pause(retry_after)
+            raise RateLimitException(source="AngelOne API", retry_after=retry_after)
+
+        # Angel One signals rate-limiting on this endpoint with HTTP 403 +
+        # body "Access denied because of exceeding access rate" (NOT 429).
+        # Treat it as a rate limit: globally pause and back off. Do NOT evict
+        # the session — it's valid, and re-logging in only adds more load.
+        if response.status_code == 403 and _is_rate_limit_body(response.text):
+            retry_after = 60
+            logger.warning(
+                "[%s] Angel One HTTP 403 rate-limit on getCandleData: %s",
+                symbol, response.text[:200] or "<empty>",
+            )
+            await angel_one_rate_limiter.pause(retry_after)
+            raise RateLimitException(source="AngelOne API", retry_after=retry_after)
+
+        # Angel One returns 401/403 (not 401 only) for invalidated/stale JWTs
+        # on the historical data endpoint — e.g. when another login on the same
+        # client silently revoked our session. The retry path will only succeed
+        # if we also evict the cached session so the next attempt re-logs in.
+        if response.status_code in (401, 403):
+            body_preview = response.text[:300] or "<empty>"
+            logger.warning(
+                "[%s] Angel One HTTP %d on getCandleData: %s",
+                symbol, response.status_code, body_preview,
+            )
+            cleared = await angel_one_auth.invalidate_if_matches(session)
+            if cleared:
+                logger.info(
+                    "[%s] Cleared cached Angel One session; next attempt will re-login.",
+                    symbol,
+                )
+            raise AngelOneAPIException(
+                f"HTTP {response.status_code} for {symbol}",
+                detail=body_preview,
+            )
 
         try:
             response.raise_for_status()

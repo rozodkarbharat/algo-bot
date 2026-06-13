@@ -88,14 +88,44 @@ def today_ist() -> date:
 
 def last_completed_trading_day() -> date:
     """
-    Return the last trading day for which complete data is available.
+    Return the last trading day for which complete session data is available.
 
-    If market is currently open (or today is a non-trading day), return
-    the previous trading day — today's data is incomplete until 15:30.
+    Today's candles are only complete after the NSE close (15:30 IST). Before
+    that — including pre-market hours — the previous trading day is returned.
+    Non-trading days (weekends) also resolve to the previous trading day.
     """
-    from app.utils.market_time import is_market_open
+    from app.utils.market_time import market_close_datetime, now_ist
 
     today = today_ist()
-    if is_market_open() or not is_trading_day(today):
+    if not is_trading_day(today):
         return get_previous_trading_day(today)
+
+    if now_ist() < market_close_datetime(today):
+        return get_previous_trading_day(today)
+
     return today
+
+
+def upcoming_trading_session() -> date:
+    """
+    Return the trading session we are currently in or about to trade.
+
+    This is the session a daily shortlist should target: the day whose
+    setup data (the previous trading day) is already complete.
+
+    Behaviour by clock:
+      - Trading day before the 15:30 IST close (incl. pre-market) → today.
+      - Trading day after the close → the next trading day.
+      - Non-trading day (weekend/holiday) → the next trading day.
+
+    Examples (assuming Mon–Fri sessions):
+      - Fri 09:00 IST → Friday   (setup = Thursday, already complete)
+      - Fri 11:00 IST → Friday
+      - Fri 16:00 IST → Monday   (Friday's session is now complete)
+      - Saturday      → Monday
+
+    Defined as ``get_next_trading_day(last_completed_trading_day())`` so it
+    stays in lockstep with the 16:30 IST scheduler, which builds the same
+    session's shortlist.
+    """
+    return get_next_trading_day(last_completed_trading_day())

@@ -55,6 +55,29 @@ class ContinuationStatisticRepository(BaseRepository[ContinuationStatistic]):
                 f"Failed to fetch ContinuationStatistic for {symbol}.", detail=str(exc)
             )
 
+    async def get_by_symbols(
+        self, symbols: list[str]
+    ) -> dict[str, ContinuationStatistic]:
+        """
+        Batch-fetch continuation statistics for many symbols in ONE query.
+
+        Returns a dict keyed by upper-cased symbol. Avoids the N+1 round-trip
+        pattern of calling get_by_symbol() in a loop, which is catastrophic
+        against a remote cluster (one network RTT per symbol).
+        """
+        if not symbols:
+            return {}
+        try:
+            upper = list({s.upper() for s in symbols})
+            docs = await ContinuationStatistic.find(
+                {"symbol": {"$in": upper}}
+            ).to_list()
+            return {doc.symbol.upper(): doc for doc in docs}
+        except Exception as exc:
+            raise DatabaseException(
+                "Failed to batch-fetch ContinuationStatistics.", detail=str(exc)
+            )
+
     async def get_tradable_stocks(self) -> list[ContinuationStatistic]:
         """Return all symbols where tradable=True, ordered by probability descending."""
         try:

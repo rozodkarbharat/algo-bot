@@ -45,6 +45,14 @@ class ORHVConfig:
     qualification_min_win_rate: float = QUALIFICATION_MIN_WIN_RATE
     """Win-rate threshold (0.0–1.0) — either criterion (wins OR rate) qualifies."""
 
+    history_coverage_min_fraction: float = 0.8
+    """
+    Fraction of the active universe that must already have a stored setup on a
+    historical day before the backfill guard treats that day as 'already
+    detected'. Below this, the day is re-detected so partial history (e.g. a few
+    single-symbol test runs) cannot silently block a full-universe backfill.
+    """
+
     # ── Phase 3 ───────────────────────────────────────────────────────────────
     max_orb_range_pct: float = DEFAULT_MAX_ORB_RANGE_PCT
     """D+1 first-candle range must be ≤ this % of OR_Close.  Wider ORBs are skipped."""
