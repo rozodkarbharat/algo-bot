@@ -32,12 +32,15 @@ export function StockTester() {
   const [result, setResult] = useState<ORHVSymbolRunResponse | null>(null)
   const [runningKey, setRunningKey] = useState<string | null>(null)
 
-  // Debounce the search input and reset to page 1 when the term changes.
+  // Debounce search so the API is only hit after typing pauses.
   useEffect(() => {
     const t = setTimeout(() => {
-      setDebouncedSearch(search.trim())
-      setPage(1)
-    }, 350)
+      const next = search.trim()
+      setDebouncedSearch((prev) => {
+        if (prev !== next) setPage(1)
+        return next
+      })
+    }, 300)
     return () => clearTimeout(t)
   }, [search])
 
@@ -46,7 +49,7 @@ export function StockTester() {
     setTimeout(() => setToast(null), 4_000)
   }
 
-  const { data, isLoading, isFetching, refetch } = useQuery({
+  const { data, isLoading, isFetching, isPlaceholderData, refetch } = useQuery({
     queryKey: ['stocks', 'list', page, debouncedSearch],
     queryFn: () =>
       stocksApi.list({
@@ -55,6 +58,7 @@ export function StockTester() {
         active_only: true,
         search: debouncedSearch || undefined,
       }),
+    placeholderData: (prev) => prev,
   })
 
   const runMutation = useMutation({
@@ -77,8 +81,9 @@ export function StockTester() {
   }
 
   const stocks: StockListItem[] = data?.items ?? []
+  const initialLoading = isLoading && !data
 
-  if (isLoading) return <PageSpinner />
+  if (initialLoading) return <PageSpinner />
 
   return (
     <div className="flex flex-col">
@@ -101,6 +106,9 @@ export function StockTester() {
                 placeholder="Search symbol or company..."
                 className="h-8 w-64 rounded border border-border bg-bg pl-8 pr-3 text-xs text-gray-200 placeholder:text-gray-600 focus:border-accent focus:outline-none"
               />
+              {isFetching && isPlaceholderData && (
+                <span className="absolute right-2.5 top-1/2 h-3 w-3 -translate-y-1/2 animate-spin rounded-full border border-gray-600 border-t-accent" />
+              )}
             </div>
             <p className="text-xs text-gray-500">
               <span className="text-gray-300">Run Shortlist</span> syncs + detects + validates ·{' '}
