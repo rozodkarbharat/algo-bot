@@ -20,8 +20,8 @@ class WalkForwardRunStatus(str, Enum):
 
 class WalkForwardRun(Document):
     run_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    strategy_id: str = Field(default="one_side_orb")
-    strategy_name: str = Field(default="One-Side ORB")
+    strategy_id: str = Field(default="opening_range_historical_validation")
+    strategy_name: str = Field(default="Opening Range Historical Validation")
     started_at: Optional[datetime] = Field(default=None)
     completed_at: Optional[datetime] = Field(default=None)
     status: WalkForwardRunStatus = Field(default=WalkForwardRunStatus.PENDING)

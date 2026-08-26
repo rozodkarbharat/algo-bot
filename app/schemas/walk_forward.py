@@ -11,7 +11,7 @@ class WalkForwardRunRequest(BaseModel):
     training_months: int = Field(default=12, ge=3, le=60, description="Training window length in months")
     testing_months: int = Field(default=3, ge=1, le=12, description="Testing window length in months")
     step_months: int = Field(default=3, ge=1, le=12, description="Step size between windows in months")
-    strategy_id: str = Field(default="one_side_orb")
+    strategy_id: str = Field(default="opening_range_historical_validation")
     base_probability_threshold: float = Field(default=0.70, ge=0.0, le=1.0)
     base_max_orb_range_pct: float = Field(default=1.0, gt=0.0)
     base_max_entry_time_ist: str = Field(default="11:30")

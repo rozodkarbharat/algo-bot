@@ -8,14 +8,12 @@ Architecture:
   templates/           — copy-paste skeleton for new strategies
 
 Active strategies (registered at import time):
-  strategies/one_side_orb/  — One-Side Opening Range Breakout
+  strategies/opening_range_historical_validation/ — ORHV
 
-Pure engine modules (unchanged, imported directly by services):
-  one_side_detector.py        — OSD detection logic
-  continuation_probability.py — continuation probability engine
-  backtest_engine.py          — historical replay engine
-  trade_simulator.py          — per-trade simulation
-  metrics_engine.py           — performance metrics calculation
+Shared modules:
+  backtest_engine.py  — BacktestConfig + BacktestEngineResult
+  trade_simulator.py  — per-trade simulation
+  metrics_engine.py   — performance metrics calculation
 
 Adding a new strategy:
   1. Copy templates/new_strategy_template/ → strategies/your_id/

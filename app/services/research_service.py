@@ -4,8 +4,7 @@ Research service — orchestrates the full research and optimization workflow.
 Responsibilities:
   1. Validate ResearchConfig and create a ResearchRun document.
   2. Resolve the symbol list (same logic as BacktestService).
-  3. Pre-fetch ALL required data ONCE into memory — OSD history, candles,
-     continuation probabilities (never reload per sweep point).
+  3. Pre-fetch candle history ONCE into memory (never reload per sweep point).
   4. Run ParameterOptimizer in a thread-pool executor (CPU-bound sweep).
   5. Load trade records from a reference backtest run for analytics.
   6. Run all analytics engines (Stock, Time, MarketCondition, Failure).
@@ -23,7 +22,7 @@ Architecture constraints enforced:
 
 import asyncio
 import time
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from typing import Optional
 
 from app.config.settings import settings
@@ -38,9 +37,7 @@ from app.models.research_run import ResearchRun, ResearchRunStatus
 from app.models.stock_performance_analytics import StockPerformanceAnalytics
 from app.repositories.backtest_run_repository import BacktestRunRepository
 from app.repositories.backtest_trade_repository import BacktestTradeRepository
-from app.repositories.continuation_statistic_repository import ContinuationStatisticRepository
 from app.repositories.historical_candle_repository import HistoricalCandleRepository
-from app.repositories.one_side_day_repository import OneSideDayRepository
 from app.repositories.parameter_optimization_repository import ParameterOptimizationRepository
 from app.repositories.research_run_repository import ResearchRunRepository
 from app.repositories.stock_performance_analytics_repository import StockPerformanceAnalyticsRepository
@@ -76,8 +73,6 @@ class ResearchService:
         self._spa_repo         = StockPerformanceAnalyticsRepository()
         self._backtest_repo    = BacktestRunRepository()
         self._trade_repo       = BacktestTradeRepository()
-        self._osd_repo         = OneSideDayRepository()
-        self._cont_repo        = ContinuationStatisticRepository()
         self._candle_repo      = HistoricalCandleRepository()
         self._stock_repo       = StockRepository()
         self._universe_svc     = StockUniverseService()
@@ -301,39 +296,11 @@ class ResearchService:
         config: ResearchConfig,
     ) -> tuple[dict, dict, dict]:
         """
-        Pre-fetch all data required for the full parameter sweep.
+        Pre-fetch candle history for the full parameter sweep.
 
-        Returns:
-            prob_scores:    symbol → continuation_probability
-            osd_history:    symbol → date_str → OSD dict
-            candle_history: symbol → date_str → list[CandleData]
+        Returns empty prob_scores / osd_history for engine interface compatibility.
         """
-        # Continuation probabilities
-        prob_scores: dict[str, float] = {}
-        for sym in symbols:
-            stat = await self._cont_repo.get_by_symbol(sym)
-            prob_scores[sym] = stat.continuation_probability if stat else 0.0
-
-        # OSD history (7-day lookback before from_date for "yesterday's OSD" logic)
-        lookback_start = config.from_date - timedelta(days=7)
-        from_dt = date_to_utc_midnight(lookback_start)
-        to_dt   = date_to_utc_midnight(config.to_date)
-
-        osd_history: dict[str, dict[str, dict]] = {}
-        for sym in symbols:
-            records = await self._osd_repo.get_between_dates(
-                symbol=sym, from_date=from_dt, to_date=to_dt
-            )
-            sym_dict: dict[str, dict] = {}
-            for rec in records:
-                date_str = utc_midnight_to_date(rec.trading_date).isoformat()
-                sym_dict[date_str] = {
-                    "is_one_side": rec.is_one_side,
-                    "direction": rec.direction,
-                }
-            osd_history[sym] = sym_dict
-
-        # Candle history
+        to_dt = date_to_utc_midnight(config.to_date)
         interval = str(CandleInterval.FIFTEEN_MINUTE)
         candle_from_dt = date_to_utc_midnight(config.from_date)
         candle_history: dict[str, dict[str, list]] = {}
@@ -355,7 +322,7 @@ class ResearchService:
             len(symbols),
             total_candle_buckets,
         )
-        return prob_scores, osd_history, candle_history
+        return {}, {}, candle_history
 
     async def _load_reference_trades(self, config: ResearchConfig) -> list:
         """

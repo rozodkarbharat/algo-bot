@@ -23,7 +23,7 @@ Architecture constraints enforced:
 import asyncio
 import time
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from typing import Optional
 
 from app.config.settings import settings  # (may not be needed)
@@ -34,9 +34,7 @@ from app.models.walk_forward_run import WalkForwardRun, WalkForwardRunStatus
 from app.models.walk_forward_segment import WalkForwardSegment
 from app.repositories.walk_forward_run_repository import WalkForwardRunRepository
 from app.repositories.walk_forward_segment_repository import WalkForwardSegmentRepository
-from app.repositories.continuation_statistic_repository import ContinuationStatisticRepository
 from app.repositories.historical_candle_repository import HistoricalCandleRepository
-from app.repositories.one_side_day_repository import OneSideDayRepository
 from app.repositories.stock_repository import StockRepository
 from app.research.walk_forward.window_generator import WalkForwardConfig, WalkForwardWindowGenerator
 from app.research.walk_forward.engine import WalkForwardEngine, WalkForwardEngineResult
@@ -84,8 +82,6 @@ class WalkForwardService:
     def __init__(self) -> None:
         self._run_repo       = WalkForwardRunRepository()
         self._segment_repo   = WalkForwardSegmentRepository()
-        self._osd_repo       = OneSideDayRepository()
-        self._cont_repo      = ContinuationStatisticRepository()
         self._candle_repo    = HistoricalCandleRepository()
         self._stock_repo     = StockRepository()
         self._universe_svc   = StockUniverseService()
@@ -380,39 +376,11 @@ class WalkForwardService:
         config: WalkForwardConfig,
     ) -> tuple[dict, dict, dict]:
         """
-        Pre-fetch all data required for the full walk-forward run.
+        Pre-fetch candle history for the full walk-forward run.
 
-        Returns:
-            prob_scores:    symbol → continuation_probability
-            osd_history:    symbol → date_str → OSD dict
-            candle_history: symbol → date_str → list[CandleData]
+        Returns empty prob_scores / osd_history for engine interface compatibility.
         """
-        # Continuation probabilities
-        prob_scores: dict[str, float] = {}
-        for sym in symbols:
-            stat = await self._cont_repo.get_by_symbol(sym)
-            prob_scores[sym] = stat.continuation_probability if stat else 0.0
-
-        # OSD history (7-day lookback before from_date for "yesterday's OSD" logic)
-        lookback_start = config.from_date - timedelta(days=7)
-        from_dt = date_to_utc_midnight(lookback_start)
-        to_dt   = date_to_utc_midnight(config.to_date)
-
-        osd_history: dict[str, dict[str, dict]] = {}
-        for sym in symbols:
-            records = await self._osd_repo.get_between_dates(
-                symbol=sym, from_date=from_dt, to_date=to_dt
-            )
-            sym_dict: dict[str, dict] = {}
-            for rec in records:
-                date_str = utc_midnight_to_date(rec.trading_date).isoformat()
-                sym_dict[date_str] = {
-                    "is_one_side": rec.is_one_side,
-                    "direction": rec.direction,
-                }
-            osd_history[sym] = sym_dict
-
-        # Candle history
+        to_dt = date_to_utc_midnight(config.to_date)
         interval = str(CandleInterval.FIFTEEN_MINUTE)
         candle_from_dt = date_to_utc_midnight(config.from_date)
         candle_history: dict[str, dict[str, list]] = {}
@@ -433,4 +401,4 @@ class WalkForwardService:
             len(symbols),
             total_candle_buckets,
         )
-        return prob_scores, osd_history, candle_history
+        return {}, {}, candle_history

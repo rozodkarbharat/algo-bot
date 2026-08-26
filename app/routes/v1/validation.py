@@ -168,7 +168,7 @@ async def get_latency(
     summary="Backtest vs paper vs live comparison",
 )
 async def get_reality_gap(
-    strategy_id: str = Query(default="one_side_orb", description="Strategy ID (required)"),
+    strategy_id: str = Query(default="opening_range_historical_validation", description="Strategy ID (required)"),
     from_date: Optional[datetime] = Query(default=None),
     to_date: Optional[datetime] = Query(default=None),
 ) -> RealityGapResponse:

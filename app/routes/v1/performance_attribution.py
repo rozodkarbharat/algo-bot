@@ -186,7 +186,7 @@ async def get_capital_efficiency(
 async def compare_strategies(
     strategy_ids: str = Query(
         ...,
-        description="Comma-separated strategy IDs to compare (e.g. 'one_side_orb,orhv')",
+        description="Comma-separated strategy IDs to compare (e.g. 'opening_range_historical_validation')",
     ),
     from_date: date = Query(default=None),
     to_date: date = Query(default=None),

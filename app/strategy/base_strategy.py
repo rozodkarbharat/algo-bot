@@ -13,7 +13,7 @@ Architecture contract:
 Usage:
     from app.strategy.strategy_registry import registry
 
-    strategy = registry.get("one_side_orb")
+    strategy = registry.get("opening_range_historical_validation")
     engine   = strategy.create_backtest_engine(config_dict)
     result   = engine.run(symbols, prob_scores, osd_history, candle_history)
 """
@@ -52,13 +52,9 @@ class DayClassificationResult:
     """
     Strategy-neutral result from a single-day pattern classifier.
 
-    Replaces the One-Side ORB-specific OneSideDetectionResult at the
-    framework level so future strategies can return their own signals
-    through the same pipeline.
-
-    For One-Side ORB:
-        is_valid         → is_one_side
-        strategy_signal  → "UP" | "DOWN" | None
+    Example (ORHV):
+        is_valid         → setup is a two-sided breakout candidate
+        strategy_signal  → None (direction decided on D+1)
     """
 
     is_valid: bool
@@ -92,13 +88,13 @@ class BaseStrategy(ABC):
     @property
     @abstractmethod
     def strategy_id(self) -> str:
-        """Unique machine-readable identifier, e.g. 'one_side_orb'.
+        """Unique machine-readable identifier, e.g. 'opening_range_historical_validation'.
         Must be a valid Python identifier and URL path segment."""
 
     @property
     @abstractmethod
     def strategy_name(self) -> str:
-        """Human-readable display name, e.g. 'One-Side ORB'."""
+        """Human-readable display name, e.g. 'Opening Range Historical Validation'."""
 
     @property
     @abstractmethod
@@ -136,9 +132,6 @@ class BaseStrategy(ABC):
         The returned object must implement:
             classify(candles: list[CandleData]) -> DayClassificationResult
 
-        For One-Side ORB this returns an OneSideDayDetector wrapped so its
-        output conforms to DayClassificationResult.
-
         Args:
             config: Optional parameter overrides.  None → use defaults.
         """
@@ -155,8 +148,6 @@ class BaseStrategy(ABC):
                 osd_history: dict,
                 candle_history: dict,
             ) -> BacktestEngineResult
-
-        For One-Side ORB this returns a BacktestEngine(BacktestConfig).
 
         Args:
             config: Full configuration dict (from get_default_config() plus

@@ -39,7 +39,7 @@ def _rm(**kwargs) -> PortfolioRiskManager:
 def _ctx(**kwargs) -> PortfolioRiskContext:
     defaults = dict(
         symbol="RELIANCE",
-        strategy_id="one_side_orb",
+        strategy_id="opening_range_historical_validation",
         sector="Energy",
         total_capital=1_000_000.0,
         available_capital=800_000.0,

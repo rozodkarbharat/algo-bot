@@ -4,15 +4,15 @@ APScheduler jobs for the live signal engine.
 Jobs defined here:
   live_market_open_init       — 9:10 AM IST  (warm caches / fetch shortlist)
   live_signal_engine_start    — 9:15 AM IST  (subscribe + activate engine)
-  live_signal_engine_stop     — 11:30 AM IST (close entry window — keep engine
+  live_signal_engine_stop     — 12:00 PM IST (close entry window — keep engine
                                               running for candle observability)
   live_session_cleanup        — 3:30 PM IST  (full stop + state reset)
 
 Schedule rationale:
-  9:10 — Pre-market warm-up: pull shortlist, log readiness.
+  9:10 — Pre-market warm-up: pull ORHV shortlist, log readiness.
   9:15 — Subscribe to ticks & activate signal engine. The first 15-min candle
          starts forming.
-  11:30 — Stop accepting new entries (per strategy spec) by deactivating the
+  12:00 — Stop accepting new entries (ORHV cutoff) by deactivating the
           signal engine. The market engine itself can keep aggregating candles
           for live charts.
   15:30 — Market close: stop the engine, flush partials, clear intraday state.
@@ -37,16 +37,16 @@ async def live_market_open_init() -> None:
     logger.info("=== Live market open init started ===")
     try:
         from app.services.live_signal_service import live_signal_service
-        from app.services.shortlist_service import ShortlistService
+        from app.services.orhv_service import ORHVService
 
-        shortlist_svc = ShortlistService()
-        shortlist = await shortlist_svc.generate_shortlist()
+        orhv_svc = ORHVService()
+        shortlist = await orhv_svc.generate_shortlist()
         tradable_count = sum(1 for e in shortlist.entries if e.tradable)
         logger.info(
-            "Live init: shortlist has %d tradable / %d candidates for %s; engine.running=%s",
+            "Live init: ORHV shortlist has %d tradable / %d candidates for %s; engine.running=%s",
             tradable_count,
             len(shortlist.entries),
-            shortlist.target_date,
+            shortlist.execution_date,
             live_signal_service.engine.running,
         )
     except Exception as exc:
@@ -74,7 +74,7 @@ async def live_signal_engine_start() -> None:
 
 async def live_signal_engine_stop() -> None:
     """
-    Close the entry window at 11:30 AM IST.
+    Close the entry window at 12:00 PM IST.
 
     We deactivate signal generation but leave the market engine running so
     live charts and state continue updating until session cleanup at 15:30.
@@ -161,13 +161,13 @@ def register_live_engine_jobs(scheduler) -> None:  # type: ignore[type-arg]
         live_signal_engine_stop,
         trigger="cron",
         day_of_week="mon-fri",
-        hour=11,
-        minute=30,
+        hour=12,
+        minute=0,
         id="live_signal_engine_stop",
         name="Live Signal Engine Entry-Window Close",
         replace_existing=True,
     )
-    logger.info("Registered job: live_signal_engine_stop (Mon–Fri 11:30 IST)")
+    logger.info("Registered job: live_signal_engine_stop (Mon–Fri 12:00 IST)")
 
     scheduler.add_job(
         live_session_cleanup,

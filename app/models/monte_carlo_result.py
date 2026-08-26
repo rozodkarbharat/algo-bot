@@ -24,7 +24,7 @@ def _utcnow() -> datetime:
 class MonteCarloResult(Document):
     result_id:   str = Field(default_factory=lambda: str(uuid.uuid4()))
     run_id:      str = Field(...)
-    # "portfolio" = combined; otherwise the strategy_id (e.g. "one_side_orb")
+    # "portfolio" = combined; otherwise the strategy_id (e.g. "opening_range_historical_validation")
     strategy_id: str = Field(...)
 
     # ── Core return metrics ────────────────────────────────────────────────────

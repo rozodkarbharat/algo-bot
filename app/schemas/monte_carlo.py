@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 class MonteCarloRunRequest(BaseModel):
     strategy_ids:     list[str]          = Field(
         ...,
-        description="One or more strategy IDs to analyse (e.g. ['one_side_orb', 'orhv']).",
+        description="One or more strategy IDs to analyse (e.g. ['opening_range_historical_validation', 'orhv']).",
     )
     simulation_count: int                = Field(
         default=1000, ge=100, le=10000,

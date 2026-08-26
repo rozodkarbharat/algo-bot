@@ -105,32 +105,6 @@ class Settings(BaseSettings):
         default="2020-01-01", description="Default start date for historical ingestion"
     )
 
-    # ── Strategy Engine — One-Side Day ────────────────────────────────────────
-    # Minimum % move from the ORB breakout level to the day extreme.
-    # Days with a smaller move are classified as invalid (not one-sided).
-    OSD_MIN_MOVE_PERCENT: float = Field(
-        default=1.0,
-        description="Minimum % move from ORB level for a valid one-side day",
-    )
-    # Continuation probability threshold above which a stock is tradable.
-    # Must be met with a sufficient sample size (OSD_MIN_OCCURRENCES).
-    OSD_CONTINUATION_THRESHOLD: float = Field(
-        default=0.70,
-        description="Minimum continuation probability (0.0–1.0) for tradable flag",
-    )
-    # Lookback window in trading days for probability calculation.
-    # 252 ≈ 1 trading year, 1260 ≈ 5 trading years.
-    OSD_LOOKBACK_DAYS: int = Field(
-        default=252,
-        description="Trading-day lookback window for continuation probability",
-    )
-    # Minimum number of one-side occurrences before the tradable flag can be set.
-    # Prevents noise from symbols with very few historical OSD days.
-    OSD_MIN_OCCURRENCES: int = Field(
-        default=10,
-        description="Minimum one-side occurrences required for tradable=True",
-    )
-
     # ── Strategy Engine — ORHV (Opening Range Historical Validation) ───────────
     # When True, the ORHV full pipeline ensures candle history is present for the
     # lookback window (syncing missing days from Angel One and running Phase 1
@@ -161,9 +135,9 @@ class Settings(BaseSettings):
         description="Max first-candle ORB range % on execution day before skipping",
     )
     # Latest 15-min candle open time (IST) that is eligible for entry.
-    # "11:30" means candles opening AT or BEFORE 11:30 AM IST can trigger entry.
+    # "12:00" means candles opening AT or BEFORE 12:00 PM IST can trigger entry.
     BACKTEST_MAX_ENTRY_TIME_IST: str = Field(
-        default="11:30",
+        default="12:00",
         description="Latest candle time (HH:MM IST) allowed for breakout entry",
     )
     # Simulated slippage as a % of the entry/exit price.
@@ -255,7 +229,7 @@ class Settings(BaseSettings):
     )
     # Latest 15-min candle open time (IST) eligible for live entry.
     LIVE_MAX_ENTRY_TIME_IST: str = Field(
-        default="11:30",
+        default="12:00",
         description="Latest candle time (HH:MM IST) allowed for live breakout entry",
     )
     # Whether the candle builder should drop ticks outside NSE session hours.

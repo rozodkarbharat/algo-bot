@@ -15,7 +15,7 @@ Strategy reference:
 
 Persistence contract:
   - `signal_id`  — application-generated short id (UUID4 hex). Always unique.
-  - `trading_date` is stored as UTC midnight (matches the OneSideDay convention).
+  - `trading_date` is stored as UTC midnight (trading-day convention).
   - `breakout_time` is a UTC-aware timestamp of the candle that triggered entry.
 """
 
@@ -82,7 +82,7 @@ class LiveSignal(Document):
 
     symbol: str = Field(..., description="NSE ticker symbol")
 
-    # UTC midnight for the trading session date (consistent with OneSideDay).
+    # UTC midnight for the trading session date.
     trading_date: datetime = Field(..., description="Trading date (UTC midnight)")
 
     signal_type: LiveSignalType = Field(..., description="BUY or SELL")
@@ -116,11 +116,11 @@ class LiveSignal(Document):
     # Defaulted for backward compatibility: existing data without this field
     # is treated as belonging to the One-Side ORB strategy.
     strategy_id: str = Field(
-        default="one_side_orb",
+        default="opening_range_historical_validation",
         description="Strategy that generated this signal",
     )
     strategy_name: str = Field(
-        default="One-Side ORB",
+        default="Opening Range Historical Validation",
         description="Human-readable strategy name",
     )
     strategy_version: str = Field(

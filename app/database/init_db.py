@@ -21,8 +21,6 @@ from beanie import Document
 from app.models.stock import Stock
 from app.models.historical_candle import HistoricalCandle
 from app.models.market_data_sync_log import MarketDataSyncLog
-from app.models.one_side_day import OneSideDay
-from app.models.continuation_statistic import ContinuationStatistic
 from app.models.backtest_run import BacktestRun
 from app.models.backtest_trade import BacktestTrade
 from app.models.backtest_metrics import BacktestMetrics
@@ -76,8 +74,6 @@ DOCUMENT_MODELS: list[Type[Document]] = [
     Stock,
     HistoricalCandle,
     MarketDataSyncLog,
-    OneSideDay,
-    ContinuationStatistic,
     BacktestRun,
     BacktestTrade,
     BacktestMetrics,

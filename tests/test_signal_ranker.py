@@ -22,7 +22,7 @@ from app.portfolio.signal_ranker import (
 
 def _inp(
     symbol: str = "RELIANCE",
-    strategy_id: str = "one_side_orb",
+    strategy_id: str = "opening_range_historical_validation",
     probability_score: float | None = 0.75,
     historical_win_rate: float | None = 0.65,
     historical_expectancy: float | None = 3_000.0,

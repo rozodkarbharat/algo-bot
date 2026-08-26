@@ -3,16 +3,15 @@ Backtest orchestration service.
 
 Responsibilities:
   1. Validate BacktestConfig and create a BacktestRun document.
-  2. Pre-fetch all required data from repositories (OSD history, continuation
-     stats, candles) into in-memory lookup dicts.
-  3. Run the BacktestEngine in a thread-pool executor (CPU-bound).
+  2. Pre-fetch candle history into in-memory lookup dicts.
+  3. Run the strategy backtest engine in a thread-pool executor (CPU-bound).
   4. Convert SimulatedTrade results to BacktestTrade documents and bulk-insert.
   5. Run the MetricsEngine and persist BacktestMetrics.
   6. Finalize the BacktestRun with summary + status.
 
 Architecture rules enforced:
   - Service calls repositories only — never Beanie/Motor directly.
-  - BacktestEngine and MetricsEngine (pure logic) are called here with data.
+  - Strategy engines and MetricsEngine (pure logic) are called here with data.
   - No broker imports — backtesting is completely broker-independent.
   - All DB access is async; CPU-bound engine is offloaded to thread pool.
 """
@@ -29,12 +28,10 @@ from app.models.backtest_trade import BacktestTrade, ExitReason
 from app.repositories.backtest_metrics_repository import BacktestMetricsRepository
 from app.repositories.backtest_run_repository import BacktestRunRepository
 from app.repositories.backtest_trade_repository import BacktestTradeRepository
-from app.repositories.continuation_statistic_repository import ContinuationStatisticRepository
 from app.repositories.historical_candle_repository import HistoricalCandleRepository
-from app.repositories.one_side_day_repository import OneSideDayRepository
 from app.repositories.stock_repository import StockRepository
 from app.services.stock_universe_service import StockUniverseService
-from app.strategy.backtest_engine import BacktestConfig, BacktestEngine
+from app.strategy.backtest_engine import BacktestConfig
 from app.strategy.metrics_engine import MetricsEngine, MetricsResult
 from app.strategy.strategy_registry import registry as strategy_registry
 from app.strategy.trade_simulator import SimulatedTrade
@@ -61,8 +58,6 @@ class BacktestService:
         self._run_repo     = BacktestRunRepository()
         self._trade_repo   = BacktestTradeRepository()
         self._metrics_repo = BacktestMetricsRepository()
-        self._osd_repo     = OneSideDayRepository()
-        self._cont_repo    = ContinuationStatisticRepository()
         self._candle_repo  = HistoricalCandleRepository()
         self._stock_repo   = StockRepository()
         self._universe_svc = StockUniverseService()
@@ -72,7 +67,7 @@ class BacktestService:
     async def run_backtest(
         self,
         config: BacktestConfig,
-        strategy_id: str = "one_side_orb",
+        strategy_id: str = "opening_range_historical_validation",
     ) -> BacktestRun:
         """
         Execute a complete backtest synchronously.
@@ -83,7 +78,7 @@ class BacktestService:
         Args:
             config:      BacktestConfig with date range, symbols, and parameters.
             strategy_id: Which registered strategy to run.  Defaults to
-                         'one_side_orb' for backward compatibility.
+                         'opening_range_historical_validation' for backward compatibility.
         """
         self._validate_config(config)
 
@@ -287,76 +282,13 @@ class BacktestService:
         config: BacktestConfig,
     ) -> tuple[dict, dict, dict]:
         """
-        Pre-fetch all required data into in-memory dicts.
+        Pre-fetch candle history into in-memory dicts.
 
-        Returns:
-            prob_scores:    symbol → continuation_probability (float)
-            osd_history:    symbol → date_str → {is_one_side, direction}
-            candle_history: symbol → date_str → list[CandleData]
-
-        OSD history is fetched one day BEFORE from_date so that the very first
-        trading day has a valid "yesterday" to look up.
+        Returns empty prob_scores / osd_history for interface compatibility —
+        ORHV (and future strategies) ignore those and build history from candles.
         """
-        # 1. Continuation probabilities
-        prob_scores = await self._load_prob_scores(symbols)
-
-        # 2. OSD history (need one extra day before from_date)
-        osd_history = await self._load_osd_history(symbols, config)
-
-        # 3. Candles for the backtest range
         candle_history = await self._load_candle_history(symbols, config)
-
-        return prob_scores, osd_history, candle_history
-
-    async def _load_prob_scores(self, symbols: list[str]) -> dict[str, float]:
-        """Load continuation probabilities for all symbols into a dict."""
-        scores: dict[str, float] = {}
-        for sym in symbols:
-            stat = await self._cont_repo.get_by_symbol(sym)
-            if stat is not None:
-                scores[sym] = stat.continuation_probability
-            else:
-                scores[sym] = 0.0
-                logger.debug("No continuation stat for %s — defaulting to 0.0", sym)
-        logger.info("Loaded probability scores for %d symbols.", len(scores))
-        return scores
-
-    async def _load_osd_history(
-        self,
-        symbols: list[str],
-        config: BacktestConfig,
-    ) -> dict[str, dict[str, dict]]:
-        """
-        Load OSD records for [from_date - lookback_buffer, to_date] for all symbols.
-
-        We look back up to 7 calendar days before from_date to ensure we capture
-        the most recent trading day before the backtest starts.
-        """
-        from datetime import timedelta
-        lookback_start = config.from_date - timedelta(days=7)
-        from_dt = date_to_utc_midnight(lookback_start)
-        to_dt   = date_to_utc_midnight(config.to_date)
-
-        osd_history: dict[str, dict[str, dict]] = {}
-
-        for sym in symbols:
-            records = await self._osd_repo.get_between_dates(
-                symbol=sym, from_date=from_dt, to_date=to_dt
-            )
-            sym_dict: dict[str, dict] = {}
-            for rec in records:
-                date_str = utc_midnight_to_date(rec.trading_date).isoformat()
-                sym_dict[date_str] = {
-                    "is_one_side": rec.is_one_side,
-                    "direction": rec.direction,
-                }
-            osd_history[sym] = sym_dict
-
-        logger.info(
-            "Loaded OSD history: %d symbols, range %s → %s",
-            len(osd_history), lookback_start, config.to_date,
-        )
-        return osd_history
+        return {}, {}, candle_history
 
     async def _load_candle_history(
         self,
@@ -397,8 +329,8 @@ class BacktestService:
         run_id: str,
         sim_trades: list[SimulatedTrade],
         config: BacktestConfig,
-        strategy_id: str = "one_side_orb",
-        strategy_name: str = "One-Side ORB",
+        strategy_id: str = "opening_range_historical_validation",
+        strategy_name: str = "Opening Range Historical Validation",
     ) -> None:
         """
         Convert SimulatedTrade results to BacktestTrade documents and bulk-insert.

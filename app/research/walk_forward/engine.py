@@ -27,8 +27,9 @@ from typing import Optional
 
 from app.research.parameter_optimizer import ParameterOptimizer, ResearchConfig, ParameterGrid
 from app.research.walk_forward.window_generator import WalkForwardConfig, WalkForwardWindow
-from app.strategy.backtest_engine import BacktestConfig, BacktestEngine
+from app.strategy.backtest_engine import BacktestConfig
 from app.strategy.metrics_engine import MetricsEngine, MetricsResult
+from app.strategy.strategy_registry import DEFAULT_STRATEGY_ID, registry
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -346,7 +347,7 @@ class WalkForwardEngine:
             "[%s] Window #%d: running BacktestEngine on testing window.",
             run_id, seg_num,
         )
-        engine = BacktestEngine(test_config)
+        engine = registry.get(DEFAULT_STRATEGY_ID).create_backtest_engine(test_config.to_dict())
         engine_result = engine.run(
             symbols=symbols,
             prob_scores=prob_scores,

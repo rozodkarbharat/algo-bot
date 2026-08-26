@@ -185,10 +185,11 @@ class TestRunSweep:
         fake_engine_result = self._mock_engine_result([trade])
 
         with patch(
-            "app.research.parameter_optimizer.BacktestEngine"
-        ) as MockEngine:
-            instance = MockEngine.return_value
-            instance.run.return_value = fake_engine_result
+            "app.research.parameter_optimizer.registry"
+        ) as mock_registry:
+            mock_strategy = mock_registry.get.return_value
+            mock_engine = mock_strategy.create_backtest_engine.return_value
+            mock_engine.run.return_value = fake_engine_result
 
             result = optimizer.run_sweep(
                 run_id="test-run-id",
@@ -207,9 +208,11 @@ class TestRunSweep:
         optimizer = ParameterOptimizer(cfg)
 
         with patch(
-            "app.research.parameter_optimizer.BacktestEngine"
-        ) as MockEngine:
-            MockEngine.return_value.run.side_effect = RuntimeError("simulated engine crash")
+            "app.research.parameter_optimizer.registry"
+        ) as mock_registry:
+            mock_strategy = mock_registry.get.return_value
+            mock_engine = mock_strategy.create_backtest_engine.return_value
+            mock_engine.run.side_effect = RuntimeError("simulated engine crash")
 
             result = optimizer.run_sweep(
                 run_id="test-run-id",
@@ -244,8 +247,10 @@ class TestRunSweep:
             symbols_processed=["RELIANCE"],
             trading_days_processed=1,
         )
-        with patch("app.research.parameter_optimizer.BacktestEngine") as MockEngine:
-            MockEngine.return_value.run.return_value = fake_result
+        with patch("app.research.parameter_optimizer.registry") as mock_registry:
+            mock_strategy = mock_registry.get.return_value
+            mock_engine = mock_strategy.create_backtest_engine.return_value
+            mock_engine.run.return_value = fake_result
             result = optimizer.run_sweep(
                 run_id="x", symbols=["RELIANCE"],
                 prob_scores={"RELIANCE": 0.72},

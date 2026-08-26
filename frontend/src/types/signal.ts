@@ -1,60 +1,9 @@
-// ── Strategy / Shortlist / Live Signals ──────────────────────────────────────
+// ── Live Signals ─────────────────────────────────────────────────────────────
 
 export type DayDirection = 'BULLISH' | 'BEARISH' | 'CHOPPY' | 'INVALID'
 export type LiveBreakoutSide = 'BUY' | 'SELL'
 export type LiveSignalStatus = 'ACTIVE' | 'TRIGGERED' | 'EXPIRED' | 'CANCELLED'
 export type LiveSignalType = 'ORB_BREAKOUT'
-
-export interface ShortlistEntry {
-  symbol: string
-  direction: DayDirection
-  orb_high: number
-  orb_low: number
-  entry_trigger: number
-  stop_loss: number
-  probability: number
-  first_candle_range_pct: number
-  tradable: boolean
-  reason_skipped: string | null
-}
-
-export interface ShortlistResponse {
-  trading_date: string
-  yesterday?: string
-  entries: ShortlistEntry[]
-  total_candidates: number
-  total_tradable: number
-  generated_at: string
-}
-
-export interface ShortlistRunResponse {
-  status: string
-  target_date: string
-  total_checked: number
-  total_shortlisted: number
-  duration_seconds: number
-  threshold_pct: number
-
-  full_pipeline?: boolean
-  data_date?: string | null
-  candles_synced?: number | null
-  sync_failed_symbols?: string[] | null
-  osd_one_side_days?: number | null
-  tradable_symbols?: number | null
-}
-
-export interface ShortlistStatusResponse {
-  running: boolean
-  last_status: 'idle' | 'running' | 'success' | 'error'
-  last_started_at: string | null
-  last_finished_at: string | null
-  last_target_date: string | null
-  last_total_checked: number
-  last_total_shortlisted: number
-  last_duration_seconds: number | null
-  last_error: string | null
-  last_trigger: 'manual' | 'scheduler' | null
-}
 
 export interface LiveSignalResponse {
   id: string

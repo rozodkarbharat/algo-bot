@@ -164,9 +164,9 @@ async def test_dispatch_failure_never_propagates():
 async def test_strategy_concentration_warning():
     router = _make_router()
     with patch.object(router, "_dispatch", AsyncMock()) as mock_dispatch:
-        await router.strategy_concentration_warning("one_side_orb", 48.0, 50.0)
+        await router.strategy_concentration_warning("opening_range_historical_validation", 48.0, 50.0)
     kwargs = mock_dispatch.call_args.kwargs
-    assert "one_side_orb" in kwargs["message"]
+    assert "opening_range_historical_validation" in kwargs["message"]
     assert kwargs["severity"] == AlertSeverity.WARNING
 
 

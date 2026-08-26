@@ -41,7 +41,7 @@ def _signal(
     entry_price: float = 2_500.0,
     stop_loss: float = 2_450.0,
     probability: float = 0.75,
-    strategy_id: str = "one_side_orb",
+    strategy_id: str = "opening_range_historical_validation",
 ) -> GeneratedSignal:
     return GeneratedSignal(
         symbol=symbol,
@@ -56,7 +56,7 @@ def _signal(
         breakout_time=_utc(),
         probability_score=probability,
         strategy_id=strategy_id,
-        strategy_name="One-Side ORB",
+        strategy_name="Opening Range Historical Validation",
         strategy_version="1.0.0",
     )
 
@@ -103,7 +103,7 @@ def _alloc_result(
     return AllocationResult(
         signal_id=signal_id,
         symbol="RELIANCE",
-        strategy_id="one_side_orb",
+        strategy_id="opening_range_historical_validation",
         method=AllocationMethod.SCORE_WEIGHTED,
         allocated_capital=capital,
         allocation_percent=capital / 1_000_000.0,
@@ -388,7 +388,7 @@ async def test_get_analytics_counts_correctly():
         a = PortfolioAllocation.model_construct(
             allocation_id="x",
             trading_date=_utc(),
-            strategy_id="one_side_orb",
+            strategy_id="opening_range_historical_validation",
             symbol="RELIANCE",
             signal_id="s",
             signal_type="BUY",

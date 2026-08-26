@@ -333,7 +333,7 @@ class ReportGenerator:
         """
         Build a concise top-level summary highlighting the most important findings.
         """
-        summary: dict[str, Any] = {"strategy": "One-Side ORB"}
+        summary: dict[str, Any] = {"strategy": "Opening Range Historical Validation"}
 
         # Best parameter configuration (from probability_threshold sweep, highest pnl)
         if sweep and sweep.points:

@@ -45,8 +45,8 @@ class BacktestTrade(Document):
     trading_date: datetime = Field(..., description="Trade date (UTC midnight)")
 
     # ── Multi-strategy fields ─────────────────────────────────────────────────
-    strategy_id: str = Field(default="one_side_orb", description="Strategy that generated this trade")
-    strategy_name: str = Field(default="One-Side ORB", description="Human-readable strategy name")
+    strategy_id: str = Field(default="opening_range_historical_validation", description="Strategy that generated this trade")
+    strategy_name: str = Field(default="Opening Range Historical Validation", description="Human-readable strategy name")
 
     # Direction of the trade — derived from yesterday's OSD direction
     trade_side: TradeSide = Field(..., description="LONG or SHORT")

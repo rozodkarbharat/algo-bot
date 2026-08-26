@@ -99,8 +99,8 @@ class GeneratedSignal:
     breakout_time: datetime  # UTC
     probability_score: Optional[float] = None
     # ── Multi-strategy identity ───────────────────────────────────────────────
-    strategy_id: str = "one_side_orb"
-    strategy_name: str = "One-Side ORB"
+    strategy_id: str = "opening_range_historical_validation"
+    strategy_name: str = "Opening Range Historical Validation"
     strategy_version: str = "1.0.0"
     metadata: dict = field(default_factory=dict)
 
@@ -133,8 +133,8 @@ class SignalEngine:
         session: Optional[MarketSessionEngine] = None,
         max_orb_range_percent: Optional[float] = None,
         first_candle_interval: CandleInterval = CandleInterval.FIFTEEN_MINUTE,
-        strategy_id: str = "one_side_orb",
-        strategy_name: str = "One-Side ORB",
+        strategy_id: str = "opening_range_historical_validation",
+        strategy_name: str = "Opening Range Historical Validation",
         strategy_version: str = "1.0.0",
     ) -> None:
         self._session: MarketSessionEngine = session or MarketSessionEngine()

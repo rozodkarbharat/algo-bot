@@ -31,8 +31,9 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Optional
 
-from app.strategy.backtest_engine import BacktestConfig, BacktestEngine, BacktestEngineResult
+from app.strategy.backtest_engine import BacktestConfig, BacktestEngineResult
 from app.strategy.metrics_engine import MetricsEngine, MetricsResult
+from app.strategy.strategy_registry import DEFAULT_STRATEGY_ID, registry
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -255,8 +256,9 @@ class ParameterOptimizer:
         osd_history: dict,
         candle_history: dict,
     ) -> OptimizationPoint:
-        """Run one BacktestEngine configuration and return metrics."""
-        engine = BacktestEngine(backtest_config)
+        """Run one strategy backtest configuration and return metrics."""
+        strategy = registry.get(DEFAULT_STRATEGY_ID)
+        engine = strategy.create_backtest_engine(backtest_config.to_dict())
         engine_result: BacktestEngineResult = engine.run(
             symbols=symbols,
             prob_scores=prob_scores,

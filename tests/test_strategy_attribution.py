@@ -20,8 +20,8 @@ def _utc(y=2025, m=1, d=1):
 
 
 def _paper_trade(
-    strategy_id="one_side_orb",
-    strategy_name="One-Side ORB",
+    strategy_id="opening_range_historical_validation",
+    strategy_name="Opening Range Historical Validation",
     symbol="RELIANCE",
     pnl=500.0,
     entry_price=2500.0,
@@ -81,7 +81,7 @@ async def test_single_strategy_paper_mode():
     results = await engine.compute(date(2025, 1, 1), date(2025, 1, 31), TradingMode.PAPER)
     assert len(results) == 1
     sp = results[0]
-    assert sp.strategy_id == "one_side_orb"
+    assert sp.strategy_id == "opening_range_historical_validation"
     assert sp.total_trades == 3
     assert sp.wins == 2
     assert sp.losses == 1

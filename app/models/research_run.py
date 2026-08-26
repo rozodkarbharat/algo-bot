@@ -42,11 +42,11 @@ class ResearchRun(Document):
 
     # ── Multi-strategy fields ─────────────────────────────────────────────────
     strategy_id: str = Field(
-        default="one_side_orb",
+        default="opening_range_historical_validation",
         description="Strategy this research run optimises",
     )
     strategy_name: str = Field(
-        default="One-Side ORB",
+        default="Opening Range Historical Validation",
         description="Human-readable strategy name",
     )
 

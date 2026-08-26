@@ -2,7 +2,7 @@
 Live signal service — orchestrates the live engine, persistence and WS broadcast.
 
 Responsibilities:
-  1. Pull the day's shortlist from ShortlistService.
+  1. Pull the day's ORHV shortlist from ORHVService.
   2. Start / stop the LiveMarketEngine for the trading session.
   3. Persist every emitted GeneratedSignal as a LiveSignal document, enforcing
      the unique (symbol, trading_date) constraint.
@@ -47,7 +47,7 @@ from app.repositories.live_signal_repository import (
     DuplicateSignalError,
     LiveSignalRepository,
 )
-from app.services.shortlist_service import ShortlistEntry, ShortlistService
+from app.services.orhv_service import ORHVService, ORHVShortlistEntry
 from app.utils.logger import get_logger
 from app.utils.market_time import date_to_utc_midnight, now_utc
 from app.websocket.manager import ws_manager
@@ -96,14 +96,14 @@ class LiveSignalService:
     def __init__(
         self,
         engine: Optional[LiveMarketEngine] = None,
-        shortlist_service: Optional[ShortlistService] = None,
+        orhv_service: Optional[ORHVService] = None,
         signal_repo: Optional[LiveSignalRepository] = None,
         state_repo: Optional[IntradayMarketStateRepository] = None,
         session: Optional[MarketSessionEngine] = None,
         health_monitor: Optional[LiveHealthMonitor] = None,
     ) -> None:
         self._engine: LiveMarketEngine = engine or live_market_engine
-        self._shortlist_svc: ShortlistService = shortlist_service or ShortlistService()
+        self._orhv_svc: ORHVService = orhv_service or ORHVService()
         self._signal_repo: LiveSignalRepository = signal_repo or LiveSignalRepository()
         self._state_repo: IntradayMarketStateRepository = (
             state_repo or IntradayMarketStateRepository()
@@ -127,7 +127,7 @@ class LiveSignalService:
         """
         Start the live engine for `target_date` (defaults to today).
 
-        Fetches today's shortlist, registers each symbol, and activates the
+        Fetches today's ORHV shortlist, registers each symbol, and activates the
         signal engine. Idempotent — if the engine is already running, this
         becomes a no-op (the existing watchlist is preserved).
         """
@@ -141,10 +141,7 @@ class LiveSignalService:
             )
 
         trading_date = target_date or self._session.current_trading_date()
-        shortlist = await self._shortlist_svc.generate_shortlist(target_date=trading_date)
-        # The shortlist now contains both tradable and skipped rows (skipped
-        # rows are surfaced in the UI with a reason); only tradable ones get
-        # subscribed in the live engine.
+        shortlist = await self._orhv_svc.generate_shortlist(target_date=trading_date)
         candidates = [
             _entry_to_candidate(e) for e in shortlist.entries if e.tradable
         ]
@@ -453,11 +450,11 @@ class LiveSignalService:
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
-def _entry_to_candidate(entry: ShortlistEntry) -> ShortlistedCandidate:
+def _entry_to_candidate(entry: ORHVShortlistEntry) -> ShortlistedCandidate:
     return ShortlistedCandidate(
         symbol=entry.symbol,
-        probability=entry.continuation_probability,
-        direction_hint=entry.direction,
+        probability=entry.win_rate,
+        direction_hint=None,
     )
 
 

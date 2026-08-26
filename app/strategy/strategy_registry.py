@@ -9,7 +9,7 @@ when app/strategy/__init__.py is first imported.
 Usage:
     from app.strategy.strategy_registry import registry
 
-    strategy = registry.get("one_side_orb")
+    strategy = registry.get("opening_range_historical_validation")
     all_ids   = registry.strategy_ids()
     listing   = registry.list_strategies()  # → list[BaseStrategy]
 """
@@ -22,6 +22,8 @@ from typing import Optional
 from app.strategy.base_strategy import BaseStrategy
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_STRATEGY_ID = "opening_range_historical_validation"
 
 
 class StrategyRegistry:
@@ -79,7 +81,7 @@ class StrategyRegistry:
     def get_or_default(
         self,
         strategy_id: Optional[str],
-        default_id: str = "one_side_orb",
+        default_id: str = DEFAULT_STRATEGY_ID,
     ) -> BaseStrategy:
         """Return the strategy for strategy_id, falling back to default_id."""
         sid = strategy_id if strategy_id else default_id
@@ -132,12 +134,10 @@ def _initialize_registry() -> None:
         return
     _registry_initialized = True
 
-    from app.strategy.strategies.one_side_orb.strategy import OneSideORBStrategy
     from app.strategy.strategies.opening_range_historical_validation.strategy import (
         OpeningRangeHistoricalValidationStrategy,
     )
 
-    registry.register(OneSideORBStrategy())
     registry.register(OpeningRangeHistoricalValidationStrategy())
 
     logger.info(

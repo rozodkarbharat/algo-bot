@@ -51,7 +51,7 @@ class SignalValidation(Document):
 
     symbol: str
     trading_date: datetime  # UTC midnight
-    strategy_id: str = "one_side_orb"
+    strategy_id: str = "opening_range_historical_validation"
     trading_mode: ValidationTradingMode  # PAPER or LIVE
 
     # ── Entry comparison ──────────────────────────────────────────────────────

@@ -57,8 +57,8 @@ class WalkForwardConfig:
     training_months: int = 12 # length of each training window in calendar months
     testing_months: int = 3   # length of each testing window  in calendar months
     step_months: int = 3      # months to advance the entire window each fold
-    strategy_id: str = "one_side_orb"
-    strategy_name: str = "One-Side ORB"
+    strategy_id: str = "opening_range_historical_validation"
+    strategy_name: str = "Opening Range Historical Validation"
     symbols: Optional[list[str]] = field(default=None)
     # Base strategy params for optimisation baseline
     base_probability_threshold: float = 0.70

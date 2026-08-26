@@ -21,8 +21,8 @@ class ValidationRunStatus(StrEnum):
 
 class ValidationRun(Document):
     run_id: str = Field(default_factory=lambda: uuid4().hex)
-    strategy_id: str = Field(default="one_side_orb")
-    strategy_name: str = Field(default="One-Side ORB")
+    strategy_id: str = Field(default="opening_range_historical_validation")
+    strategy_name: str = Field(default="Opening Range Historical Validation")
     trading_date: Optional[datetime] = None  # UTC midnight; None = all-time run
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None

@@ -407,7 +407,7 @@ class TestReportGenerator:
         s3  = sim.run(SAMPLE_PNLS + WINNING_PNLS)  # combined
 
         report = rg.generate_strategy_comparison_report(
-            {"one_side_orb": s1, "orhv": s2}, s3, 1_000_000
+            {"opening_range_historical_validation": s1, "orhv": s2}, s3, 1_000_000
         )
         assert report["report_type"] == "strategy_comparison_report"
         assert len(report["strategies"]) == 2

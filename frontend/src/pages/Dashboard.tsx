@@ -15,7 +15,7 @@ import { Badge } from '@/components/ui/Badge'
 import { PageSpinner } from '@/components/ui/Spinner'
 import { Table } from '@/components/ui/Table'
 import { StatusDot } from '@/components/ui/StatusDot'
-import { liveApi, paperApi, shortlistApi, syncApi } from '@/api'
+import { liveApi, paperApi, orhvApi, syncApi } from '@/api'
 import { fmtCurrency, fmtPct, fmtDateTime, pnlClass, pnlSign } from '@/utils/formatters'
 import { useSettingsStore } from '@/store/useSettingsStore'
 
@@ -43,8 +43,8 @@ export function Dashboard() {
   })
 
   const { data: shortlist } = useQuery({
-    queryKey: ['shortlist', 'today', probabilityThreshold],
-    queryFn: () => shortlistApi.today(probabilityThreshold),
+    queryKey: ['orhv', 'today', probabilityThreshold],
+    queryFn: () => orhvApi.today(probabilityThreshold),
     refetchInterval: interval,
   })
 
@@ -177,35 +177,26 @@ export function Dashboard() {
                     ),
                   },
                   {
-                    key: 'direction',
-                    header: 'Dir',
-                    render: (row) => (
-                      <Badge variant={row.direction === 'BULLISH' ? 'bull' : 'bear'}>
-                        {row.direction === 'BULLISH' ? '▲ LONG' : '▼ SHORT'}
-                      </Badge>
-                    ),
-                  },
-                  {
-                    key: 'prob',
-                    header: 'Prob',
+                    key: 'win_rate',
+                    header: 'Win%',
                     align: 'right',
                     render: (row) => (
-                      <span className={row.probability >= 0.65 ? 'text-bull' : 'text-warn'}>
-                        {fmtPct(row.probability)}
+                      <span className={row.win_rate >= 0.65 ? 'text-bull' : 'text-warn'}>
+                        {fmtPct(row.win_rate)}
                       </span>
                     ),
                   },
                   {
-                    key: 'entry',
-                    header: 'Entry',
+                    key: 'orb',
+                    header: 'ORB%',
                     align: 'right',
-                    render: (row) => `₹${row.entry_trigger.toFixed(2)}`,
+                    render: (row) => `${row.orb_range_pct.toFixed(2)}%`,
                   },
                   {
-                    key: 'sl',
-                    header: 'SL',
+                    key: 'n',
+                    header: 'N',
                     align: 'right',
-                    render: (row) => `₹${row.stop_loss.toFixed(2)}`,
+                    render: (row) => `${row.wins}/${row.occurrences_used}`,
                   },
                 ]}
                 data={shortlist.entries.filter((e) => e.tradable)}

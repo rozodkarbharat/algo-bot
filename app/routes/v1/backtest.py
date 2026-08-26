@@ -234,7 +234,7 @@ async def get_analytics(run_id: str) -> BacktestAnalyticsResponse:
 def _run_to_response(run) -> BacktestRunResponse:
     return BacktestRunResponse(
         run_id=run.run_id,
-        strategy_id=getattr(run, "strategy_id", "one_side_orb"),
+        strategy_id=getattr(run, "strategy_id", "opening_range_historical_validation"),
         strategy_name=run.strategy_name,
         strategy_version=getattr(run, "strategy_version", "1.0.0"),
         status=run.status.value,

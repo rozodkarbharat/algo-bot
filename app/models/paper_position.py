@@ -81,8 +81,8 @@ class PaperPosition(Document):
     signal_id: Optional[str] = Field(default=None, description="Source LiveSignal id")
 
     # Multi-strategy identity
-    strategy_id: str = Field(default="one_side_orb", description="Strategy that generated the signal")
-    strategy_name: str = Field(default="One-Side ORB", description="Human-readable strategy name")
+    strategy_id: str = Field(default="opening_range_historical_validation", description="Strategy that generated the signal")
+    strategy_name: str = Field(default="Opening Range Historical Validation", description="Human-readable strategy name")
 
     opened_at: datetime = Field(default_factory=_utcnow)
     closed_at: Optional[datetime] = Field(default=None)

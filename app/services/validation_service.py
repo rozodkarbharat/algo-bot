@@ -112,7 +112,7 @@ class ValidationService:
                 LiveSignal.trading_date >= from_date,
                 LiveSignal.trading_date <= to_date,
             ).to_list()
-            strategy_ids = list({s.strategy_id for s in signals}) or ["one_side_orb"]
+            strategy_ids = list({s.strategy_id for s in signals}) or ["opening_range_historical_validation"]
 
         results = []
         for sid in strategy_ids:

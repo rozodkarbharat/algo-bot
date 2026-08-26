@@ -40,11 +40,11 @@ class BacktestRun(Document):
         description="Unique external run identifier (UUID)",
     )
     strategy_id: str = Field(
-        default="one_side_orb",
+        default="opening_range_historical_validation",
         description="Machine-readable strategy identifier",
     )
     strategy_name: str = Field(
-        default="One-Side ORB",
+        default="Opening Range Historical Validation",
         description="Human-readable strategy name at run time",
     )
     strategy_version: str = Field(

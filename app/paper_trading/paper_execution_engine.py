@@ -59,8 +59,8 @@ class PaperFill:
     entry_brokerage: float
     capital_used: float
     fill_time: datetime
-    strategy_id: str = "one_side_orb"
-    strategy_name: str = "One-Side ORB"
+    strategy_id: str = "opening_range_historical_validation"
+    strategy_name: str = "Opening Range Historical Validation"
     strategy_version: str = "1.0.0"
     metadata: dict = field(default_factory=dict)
 

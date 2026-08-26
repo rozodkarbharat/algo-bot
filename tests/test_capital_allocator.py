@@ -35,7 +35,7 @@ def _allocator(
 def _inp(
     signal_id: str = "sig1",
     symbol: str = "RELIANCE",
-    strategy_id: str = "one_side_orb",
+    strategy_id: str = "opening_range_historical_validation",
     ranking_score: float = 0.70,
     entry_price: float = 2_500.0,
     stop_loss: float = 2_450.0,

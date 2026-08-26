@@ -107,8 +107,8 @@ export function Settings() {
         {/* Risk Settings */}
         <Card title="Risk Parameters">
           <Field
-            label="Probability Threshold"
-            description="Minimum historical continuation probability to include a stock in the shortlist"
+            label="Win-Rate Threshold"
+            description="Minimum ORHV historical win rate to include a stock in the shortlist"
           >
             <div className="flex items-center gap-3">
               <input

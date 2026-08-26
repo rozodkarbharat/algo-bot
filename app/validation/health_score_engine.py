@@ -17,7 +17,7 @@ Typical usage
 -------------
     engine = HealthScoreEngine()
     result = await engine.compute(
-        strategy_id="one_side_orb",
+        strategy_id="opening_range_historical_validation",
         from_date=datetime(2024, 1, 1, tzinfo=timezone.utc),
         to_date=datetime(2024, 3, 31, tzinfo=timezone.utc),
     )

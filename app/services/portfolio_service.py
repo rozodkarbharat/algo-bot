@@ -44,7 +44,6 @@ from app.models.portfolio_risk_state import PortfolioRiskState
 from app.portfolio.capital_allocator import AllocationInput, CapitalAllocator
 from app.portfolio.portfolio_risk_manager import PortfolioRiskContext, PortfolioRiskManager
 from app.portfolio.signal_ranker import SignalRankInput, SignalRanker
-from app.repositories.continuation_statistic_repository import ContinuationStatisticRepository
 from app.repositories.portfolio_allocation_repository import PortfolioAllocationRepository
 from app.repositories.portfolio_risk_state_repository import PortfolioRiskStateRepository
 from app.repositories.stock_performance_analytics_repository import StockPerformanceAnalyticsRepository
@@ -102,7 +101,6 @@ class PortfolioService:
         risk_state_repo: Optional[PortfolioRiskStateRepository] = None,
         stock_repo: Optional[StockRepository] = None,
         analytics_repo: Optional[StockPerformanceAnalyticsRepository] = None,
-        continuation_repo: Optional[ContinuationStatisticRepository] = None,
         ranker: Optional[SignalRanker] = None,
         risk_manager: Optional[PortfolioRiskManager] = None,
     ) -> None:
@@ -112,7 +110,6 @@ class PortfolioService:
         self._risk_repo = risk_state_repo or PortfolioRiskStateRepository()
         self._stock_repo = stock_repo or StockRepository()
         self._analytics_repo = analytics_repo or StockPerformanceAnalyticsRepository()
-        self._continuation_repo = continuation_repo or ContinuationStatisticRepository()
 
         self._ranker = ranker or SignalRanker()
         self._risk = risk_manager or PortfolioRiskManager(
@@ -354,7 +351,6 @@ class PortfolioService:
         self, signal: GeneratedSignal, symbol: str
     ) -> SignalRankInput:
         analytics = await self._analytics_repo.get_by_symbol(symbol)
-        continuation = await self._continuation_repo.get_by_symbol(symbol)
         return SignalRankInput(
             symbol=symbol,
             strategy_id=signal.strategy_id,
@@ -362,9 +358,9 @@ class PortfolioService:
             historical_win_rate=analytics.win_rate if analytics else None,
             historical_expectancy=analytics.expectancy if analytics else None,
             historical_max_drawdown=analytics.max_drawdown if analytics else None,
-            continuation_probability=(
-                continuation.continuation_probability if continuation else None
-            ),
+            # ORHV uses win_rate as probability_score; keep reliability neutral
+            # unless stock analytics already encode reliability via win_rate.
+            continuation_probability=signal.probability_score,
         )
 
     async def _get_sector(self, symbol: str) -> Optional[str]:

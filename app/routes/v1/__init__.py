@@ -12,8 +12,6 @@ from fastapi import APIRouter, Depends
 from app.routes.v1.auth import router as auth_router
 from app.routes.v1.stocks import router as stocks_router
 from app.routes.v1.sync import router as sync_router
-from app.routes.v1.analysis import router as analysis_router
-from app.routes.v1.shortlist import router as shortlist_router
 from app.routes.v1.backtest import router as backtest_router
 from app.routes.v1.research import router as research_router
 from app.routes.v1.live import router as live_router
@@ -49,8 +47,6 @@ _auth_dep = [Depends(get_current_user)]
 
 router.include_router(stocks_router, prefix="/stocks", tags=["Stocks"], dependencies=_auth_dep)
 router.include_router(sync_router, prefix="/sync", tags=["Data Sync"], dependencies=_auth_dep)
-router.include_router(analysis_router, tags=["Strategy Analysis"], dependencies=_auth_dep)
-router.include_router(shortlist_router, prefix="/shortlist", tags=["Shortlist"], dependencies=_auth_dep)
 router.include_router(backtest_router, prefix="/backtest", tags=["Backtesting"], dependencies=_auth_dep)
 router.include_router(research_router, prefix="/research", tags=["Research & Optimization"], dependencies=_auth_dep)
 router.include_router(live_router, prefix="/live", tags=["Live Signals"], dependencies=_auth_dep)

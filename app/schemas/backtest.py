@@ -17,7 +17,7 @@ class BacktestRunRequest(BaseModel):
     """Request body for POST /api/v1/backtest/run."""
 
     strategy_id: str = Field(
-        default="one_side_orb",
+        default="opening_range_historical_validation",
         description="Strategy to backtest.  See GET /api/v1/strategies for available IDs.",
     )
     from_date: date = Field(..., description="Backtest start date (inclusive)")
@@ -73,7 +73,7 @@ class BacktestRunResponse(BaseModel):
     """API representation of a BacktestRun document."""
 
     run_id: str
-    strategy_id: str = "one_side_orb"
+    strategy_id: str = "opening_range_historical_validation"
     strategy_name: str
     strategy_version: str = "1.0.0"
     status: str

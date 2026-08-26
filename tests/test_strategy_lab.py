@@ -51,7 +51,7 @@ def _utcnow() -> datetime:
 
 
 def _make_catalog(
-    strategy_id: str = "one_side_orb",
+    strategy_id: str = "opening_range_historical_validation",
     status: StrategyStatus = StrategyStatus.DEVELOPMENT,
     catalog_id: str | None = None,
     current_version: str = "1.0.0",
@@ -59,12 +59,12 @@ def _make_catalog(
     return StrategyCatalog.model_construct(
         catalog_id=catalog_id or str(uuid.uuid4()),
         strategy_id=strategy_id,
-        strategy_name="One Side ORB",
+        strategy_name="Opening Range Historical Validation",
         current_version=current_version,
         status=status,
-        description="Opening range breakout strategy",
-        category="momentum",
-        tags=["orb", "intraday"],
+        description="Opening Range Historical Validation strategy",
+        category="intraday",
+        tags=["orhv", "intraday"],
         created_at=_utcnow(),
         updated_at=_utcnow(),
         metadata={},
@@ -73,7 +73,7 @@ def _make_catalog(
 
 def _make_version(
     catalog_id: str | None = None,
-    strategy_id: str = "one_side_orb",
+    strategy_id: str = "opening_range_historical_validation",
     version: str = "1.0.0",
 ) -> StrategyVersion:
     return StrategyVersion.model_construct(
@@ -89,7 +89,7 @@ def _make_version(
 
 
 def _make_experiment(
-    strategy_id: str = "one_side_orb",
+    strategy_id: str = "opening_range_historical_validation",
     catalog_id: str | None = None,
     status: ExperimentStatus = ExperimentStatus.PENDING,
     experiment_id: str | None = None,
@@ -114,7 +114,7 @@ def _make_experiment(
 
 
 def _make_ab_test(
-    strategy_a_id: str = "one_side_orb",
+    strategy_a_id: str = "opening_range_historical_validation",
     strategy_b_id: str = "orhv",
     status: ABTestStatus = ABTestStatus.PENDING,
     ab_test_id: str | None = None,
@@ -144,7 +144,7 @@ def _make_ab_test(
 
 
 def _make_scorecard(
-    strategy_id: str = "one_side_orb",
+    strategy_id: str = "opening_range_historical_validation",
     catalog_id: str | None = None,
     overall_score: float = 72.5,
 ) -> StrategyScorecard:
@@ -256,7 +256,7 @@ def mock_scorecard_repo() -> MagicMock:
 @pytest.fixture
 def sample_catalog() -> StrategyCatalog:
     return _make_catalog(
-        strategy_id="one_side_orb",
+        strategy_id="opening_range_historical_validation",
         status=StrategyStatus.DEVELOPMENT,
         catalog_id="cat-001",
     )
@@ -315,7 +315,7 @@ class TestStrategyCatalog:
         mock_catalog_repo.list_all.return_value = [sample_catalog]
         result = await service.list_catalog()
         assert len(result) == 1
-        assert result[0].strategy_id == "one_side_orb"
+        assert result[0].strategy_id == "opening_range_historical_validation"
         mock_catalog_repo.list_all.assert_awaited_once()
 
     @pytest.mark.asyncio
@@ -339,8 +339,8 @@ class TestStrategyCatalog:
         sample_catalog: StrategyCatalog,
     ) -> None:
         mock_catalog_repo.get_by_strategy_id.return_value = sample_catalog
-        result = await service.get_catalog_entry("one_side_orb")
-        assert result.strategy_id == "one_side_orb"
+        result = await service.get_catalog_entry("opening_range_historical_validation")
+        assert result.strategy_id == "opening_range_historical_validation"
         assert result.status == StrategyStatus.DEVELOPMENT
 
     @pytest.mark.asyncio
@@ -378,13 +378,13 @@ class TestStrategyCatalog:
         with patch("app.strategy.strategy_registry.registry") as mock_registry:
             mock_registry.get.return_value = mock_strategy
             result = await service.register_strategy(
-                strategy_id="one_side_orb",
+                strategy_id="opening_range_historical_validation",
                 description="Custom description",
                 category="momentum",
                 tags=["orb"],
             )
 
-        assert result.strategy_id == "one_side_orb"
+        assert result.strategy_id == "opening_range_historical_validation"
         mock_catalog_repo.create.assert_awaited_once()
         mock_version_repo.create.assert_awaited_once()
 
@@ -397,7 +397,7 @@ class TestStrategyCatalog:
     ) -> None:
         mock_catalog_repo.get_by_strategy_id.return_value = sample_catalog
         with pytest.raises(ValueError, match="already registered"):
-            await service.register_strategy(strategy_id="one_side_orb")
+            await service.register_strategy(strategy_id="opening_range_historical_validation")
 
 
 # ===========================================================================
@@ -421,7 +421,7 @@ class TestPromotionPipeline:
         mock_catalog_repo.save.return_value = updated
         mock_deployment_repo.create.return_value = MagicMock()
 
-        result = await service.promote_strategy("one_side_orb")
+        result = await service.promote_strategy("opening_range_historical_validation")
         assert result.status == StrategyStatus.TESTING
         mock_deployment_repo.create.assert_awaited_once()
 
@@ -443,7 +443,7 @@ class TestPromotionPipeline:
         mock_experiment_repo.get_by_strategy_id.return_value = [completed_exp]
         mock_deployment_repo.create.return_value = MagicMock()
 
-        result = await service.promote_strategy("one_side_orb")
+        result = await service.promote_strategy("opening_range_historical_validation")
         assert result.status == StrategyStatus.PAPER
 
     @pytest.mark.asyncio
@@ -463,7 +463,7 @@ class TestPromotionPipeline:
         mock_scorecard_repo.get_latest_for_strategy.return_value = sample_scorecard  # score=72.5
         mock_deployment_repo.create.return_value = MagicMock()
 
-        result = await service.promote_strategy("one_side_orb")
+        result = await service.promote_strategy("opening_range_historical_validation")
         assert result.status == StrategyStatus.LIVE
 
     @pytest.mark.asyncio
@@ -478,7 +478,7 @@ class TestPromotionPipeline:
         mock_scorecard_repo.get_latest_for_strategy.return_value = None
 
         with pytest.raises(ValueError, match="no scorecard found"):
-            await service.promote_strategy("one_side_orb")
+            await service.promote_strategy("opening_range_historical_validation")
 
     @pytest.mark.asyncio
     async def test_promote_paper_to_live_low_score(
@@ -493,7 +493,7 @@ class TestPromotionPipeline:
         mock_scorecard_repo.get_latest_for_strategy.return_value = low_score_card
 
         with pytest.raises(ValueError, match="below the required 50.0"):
-            await service.promote_strategy("one_side_orb")
+            await service.promote_strategy("opening_range_historical_validation")
 
     @pytest.mark.asyncio
     async def test_promote_retired_raises(
@@ -505,7 +505,7 @@ class TestPromotionPipeline:
         mock_catalog_repo.get_by_strategy_id.return_value = catalog
 
         with pytest.raises(ValueError, match="already RETIRED"):
-            await service.promote_strategy("one_side_orb")
+            await service.promote_strategy("opening_range_historical_validation")
 
     @pytest.mark.asyncio
     async def test_retire_from_any_status(
@@ -520,7 +520,7 @@ class TestPromotionPipeline:
         mock_catalog_repo.save.return_value = retired
         mock_deployment_repo.create.return_value = MagicMock()
 
-        result = await service.retire_strategy("one_side_orb")
+        result = await service.retire_strategy("opening_range_historical_validation")
         assert result.status == StrategyStatus.RETIRED
         mock_deployment_repo.create.assert_awaited_once()
 
@@ -537,7 +537,7 @@ class TestPromotionPipeline:
         mock_experiment_repo.get_by_strategy_id.return_value = []  # no experiments
 
         with pytest.raises(ValueError, match="COMPLETED experiment is required"):
-            await service.promote_strategy("one_side_orb")
+            await service.promote_strategy("opening_range_historical_validation")
 
 
 # ===========================================================================
@@ -566,7 +566,7 @@ class TestStrategyVersioning:
         mock_catalog_repo.save.return_value = sample_catalog
 
         result = await service.add_version(
-            strategy_id="one_side_orb",
+            strategy_id="opening_range_historical_validation",
             version="2.0.0",
             parameters={"stop_loss_pct": 0.6},
             change_notes="Updated stop loss",
@@ -590,7 +590,7 @@ class TestStrategyVersioning:
 
         with pytest.raises(ValueError, match="already exists for strategy"):
             await service.add_version(
-                strategy_id="one_side_orb",
+                strategy_id="opening_range_historical_validation",
                 version="1.0.0",
                 parameters={},
             )
@@ -607,7 +607,7 @@ class TestStrategyVersioning:
         mock_catalog_repo.get_by_strategy_id.return_value = sample_catalog
         mock_version_repo.get_by_catalog_id.return_value = [sample_version]
 
-        result = await service.list_versions("one_side_orb")
+        result = await service.list_versions("opening_range_historical_validation")
         assert len(result) == 1
         assert result[0].version == "1.0.0"
         mock_version_repo.get_by_catalog_id.assert_awaited_once_with(sample_catalog.catalog_id)
@@ -630,14 +630,14 @@ class TestExperimentFramework:
         mock_catalog_repo.get_by_strategy_id.return_value = sample_catalog
 
         pending_exp = _make_experiment(
-            strategy_id="one_side_orb",
+            strategy_id="opening_range_historical_validation",
             catalog_id=sample_catalog.catalog_id,
             status=ExperimentStatus.PENDING,
         )
         mock_experiment_repo.create.return_value = pending_exp
 
         result = await service.create_experiment(
-            strategy_id="one_side_orb",
+            strategy_id="opening_range_historical_validation",
             name="Test Experiment",
             parameter_set={"stop_loss_pct": 0.5},
             description="Testing stop loss",
@@ -645,7 +645,7 @@ class TestExperimentFramework:
         )
 
         assert result.status == ExperimentStatus.PENDING
-        assert result.strategy_id == "one_side_orb"
+        assert result.strategy_id == "opening_range_historical_validation"
         mock_experiment_repo.create.assert_awaited_once()
 
     @pytest.mark.asyncio
@@ -697,14 +697,14 @@ class TestExperimentFramework:
         service: StrategyLabService,
         mock_experiment_repo: MagicMock,
     ) -> None:
-        exp1 = _make_experiment(strategy_id="one_side_orb")
-        exp2 = _make_experiment(strategy_id="one_side_orb")
+        exp1 = _make_experiment(strategy_id="opening_range_historical_validation")
+        exp2 = _make_experiment(strategy_id="opening_range_historical_validation")
         mock_experiment_repo.get_by_strategy_id.return_value = [exp1, exp2]
 
-        result = await service.list_experiments(strategy_id="one_side_orb")
+        result = await service.list_experiments(strategy_id="opening_range_historical_validation")
         assert len(result) == 2
         mock_experiment_repo.get_by_strategy_id.assert_awaited_once_with(
-            "one_side_orb", limit=100
+            "opening_range_historical_validation", limit=100
         )
 
 
@@ -721,7 +721,7 @@ class TestABTesting:
         mock_ab_test_repo: MagicMock,
     ) -> None:
         ab_test = _make_ab_test(
-            strategy_a_id="one_side_orb",
+            strategy_a_id="opening_range_historical_validation",
             strategy_b_id="orhv",
             status=ABTestStatus.PENDING,
         )
@@ -729,7 +729,7 @@ class TestABTesting:
 
         result = await service.create_ab_test(
             name="ORB vs ORHV",
-            strategy_a_id="one_side_orb",
+            strategy_a_id="opening_range_historical_validation",
             strategy_b_id="orhv",
             strategy_a_params={},
             strategy_b_params={},
@@ -738,7 +738,7 @@ class TestABTesting:
         )
 
         assert result.status == ABTestStatus.PENDING
-        assert result.strategy_a_id == "one_side_orb"
+        assert result.strategy_a_id == "opening_range_historical_validation"
         assert result.strategy_b_id == "orhv"
         mock_ab_test_repo.create.assert_awaited_once()
 
@@ -865,7 +865,7 @@ class TestStrategyScorecard:
         mock_scorecard_repo.upsert_for_strategy.side_effect = lambda doc: doc
 
         result = await service.compute_scorecard(
-            strategy_id="one_side_orb",
+            strategy_id="opening_range_historical_validation",
             data_source="BACKTEST",
             metrics=metrics,
         )
@@ -889,7 +889,7 @@ class TestStrategyScorecard:
 
         # Only win_rate and sharpe provided; others default to 0 in compute_overall_score
         result = await service.compute_scorecard(
-            strategy_id="one_side_orb",
+            strategy_id="opening_range_historical_validation",
             metrics={"win_rate": 0.60, "sharpe_ratio": 1.5},
         )
 
@@ -907,9 +907,9 @@ class TestStrategyScorecard:
     ) -> None:
         mock_scorecard_repo.get_latest_for_strategy.return_value = sample_scorecard
 
-        result = await service.get_scorecard("one_side_orb")
+        result = await service.get_scorecard("opening_range_historical_validation")
         assert result.overall_score == 72.5
-        mock_scorecard_repo.get_latest_for_strategy.assert_awaited_once_with("one_side_orb")
+        mock_scorecard_repo.get_latest_for_strategy.assert_awaited_once_with("opening_range_historical_validation")
 
     @pytest.mark.asyncio
     async def test_get_scorecard_not_found(
@@ -920,7 +920,7 @@ class TestStrategyScorecard:
         mock_scorecard_repo.get_latest_for_strategy.return_value = None
 
         with pytest.raises(ValueError, match="No scorecard found for strategy"):
-            await service.get_scorecard("one_side_orb")
+            await service.get_scorecard("opening_range_historical_validation")
 
     @pytest.mark.asyncio
     async def test_get_leaderboard(

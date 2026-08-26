@@ -8,7 +8,7 @@ reason categorisation.
 Typical usage::
 
     engine = SignalQualityEngine()
-    result = await engine.compute(from_date, to_date, strategy_id="one_side_orb")
+    result = await engine.compute(from_date, to_date, strategy_id="opening_range_historical_validation")
     print(result.conversion_rate, result.by_strategy)
 """
 
