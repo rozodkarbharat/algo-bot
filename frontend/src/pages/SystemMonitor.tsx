@@ -3,6 +3,8 @@ import { Server, Database, Wifi, Clock, AlertCircle } from 'lucide-react'
 import { Header } from '@/layouts/Header'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
+import { Button } from '@/components/ui/Button'
+import { Modal } from '@/components/ui/Modal'
 import { Table } from '@/components/ui/Table'
 import { StatusDot } from '@/components/ui/StatusDot'
 import { Pagination } from '@/components/ui/Pagination'
@@ -40,6 +42,7 @@ function WsStatusRow({
 
 export function SystemMonitor() {
   const [logsPage, setLogsPage] = useState(1)
+  const [selectedLog, setSelectedLog] = useState<SyncLogResponse | null>(null)
   const { wsStatus } = useSystemStore()
 
   const { data: health, refetch: refetchHealth } = useQuery({
@@ -318,6 +321,7 @@ export function SystemMonitor() {
             ]}
             data={syncLogs?.items ?? []}
             rowKey={(row) => row.id}
+            onRowClick={setSelectedLog}
             emptyMessage="No sync logs"
           />
           {syncLogs && (
@@ -331,6 +335,122 @@ export function SystemMonitor() {
           )}
         </Card>
       </div>
+
+      <SyncLogDetailModal
+        log={selectedLog}
+        onClose={() => setSelectedLog(null)}
+        statusVariant={syncStatusVariant}
+      />
+    </div>
+  )
+}
+
+function SyncLogDetailModal({
+  log,
+  onClose,
+  statusVariant,
+}: {
+  log: SyncLogResponse | null
+  onClose: () => void
+  statusVariant: (status: string) => string
+}) {
+  if (!log) return null
+
+  const durationMs =
+    log.sync_end && log.created_at
+      ? new Date(log.sync_end).getTime() - new Date(log.created_at).getTime()
+      : null
+  const durationLabel =
+    durationMs != null && durationMs >= 0
+      ? durationMs < 1000
+        ? `${durationMs}ms`
+        : `${(durationMs / 1000).toFixed(1)}s`
+      : '—'
+
+  const looksLikeRateLimit = Boolean(
+    log.error_message &&
+      /rate.?limit|exceeding access rate|429/i.test(log.error_message),
+  )
+  const looksLikeInvalidToken = Boolean(
+    log.error_message && /invalid token/i.test(log.error_message),
+  )
+  const looksLikeOpaqueChunkFail = Boolean(
+    log.error_message &&
+      /failed to fetch chunk/i.test(log.error_message) &&
+      !looksLikeRateLimit &&
+      !looksLikeInvalidToken,
+  )
+
+  let errorHint: string | null = null
+  if (looksLikeRateLimit) {
+    errorHint = 'Looks like Angel One rate limiting (HTTP 429 / access rate).'
+  } else if (looksLikeInvalidToken) {
+    errorHint =
+      'Looks like an Angel One auth/session failure (Invalid Token), not rate limiting.'
+  } else if (looksLikeOpaqueChunkFail) {
+    errorHint =
+      'Chunk fetch failed after retries. Recent runs of this pattern were Invalid Token (stale Angel One JWT), not rate limiting.'
+  }
+
+  return (
+    <Modal
+      open={!!log}
+      onClose={onClose}
+      title={`${log.symbol} — Sync Log`}
+      className="max-w-xl"
+      footer={
+        <Button variant="secondary" size="sm" onClick={onClose}>
+          Close
+        </Button>
+      }
+    >
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge
+            variant={statusVariant(log.status) as 'bull' | 'bear' | 'accent' | 'warn' | 'ghost'}
+            dot={log.status === 'RUNNING'}
+          >
+            {log.status}
+          </Badge>
+          <span className="text-xs font-mono text-gray-500">{log.interval}</span>
+          <span className="text-xs font-mono text-gray-500">{log.exchange}</span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 text-xs">
+          <DetailField label="Symbol" value={log.symbol} />
+          <DetailField label="Log ID" value={log.id || '—'} />
+          <DetailField label="Sync from" value={fmtDate(log.sync_from)} />
+          <DetailField label="Sync to" value={fmtDate(log.sync_to)} />
+          <DetailField label="Records inserted" value={String(log.records_inserted)} />
+          <DetailField label="Records skipped" value={String(log.records_skipped)} />
+          <DetailField label="Started" value={fmtDateTime(log.created_at)} />
+          <DetailField label="Finished" value={fmtDateTime(log.sync_end)} />
+          <DetailField label="Duration" value={durationLabel} />
+        </div>
+
+        {log.error_message ? (
+          <div className="space-y-2">
+            <p className="text-xs text-gray-500">Error detail</p>
+            <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded border border-bear/30 bg-bear-muted/40 px-3 py-2 font-mono text-[11px] leading-relaxed text-bear">
+              {log.error_message}
+            </pre>
+            {(errorHint) && (
+              <p className="text-[11px] text-gray-500">{errorHint}</p>
+            )}
+          </div>
+        ) : (
+          <p className="text-xs text-gray-600">No error recorded for this run.</p>
+        )}
+      </div>
+    </Modal>
+  )
+}
+
+function DetailField({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-gray-500">{label}</p>
+      <p className="font-mono text-gray-200">{value}</p>
     </div>
   )
 }

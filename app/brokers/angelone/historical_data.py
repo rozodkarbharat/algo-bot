@@ -197,9 +197,12 @@ class AngelOneHistoricalClient:
                 else:
                     logger.error("[%s] Unexpected error after %d retries: %s", symbol, _MAX_RETRIES, exc)
 
+        # Include the underlying cause in the message so sync logs / UI show
+        # e.g. "Invalid Token" instead of only "Failed to fetch chunk …".
+        cause = str(last_exc) if last_exc else "unknown error"
         raise AngelOneAPIException(
-            message=f"Failed to fetch chunk {from_date}–{to_date} for {symbol}",
-            detail=str(last_exc),
+            message=f"Failed to fetch chunk {from_date}–{to_date} for {symbol}: {cause}",
+            detail=cause,
         )
 
     async def _call_api(self, payload: dict, symbol: str) -> list[CandleData]:
@@ -269,6 +272,16 @@ class AngelOneHistoricalClient:
         if not body.get("status"):
             error_code = body.get("errorcode", "")
             message = body.get("message", "Unknown API error")
+            # Angel One often returns HTTP 200 + status=false + "Invalid Token"
+            # (not 401/403). Evict the stale JWT so the next retry re-logs in.
+            if "invalid token" in message.lower():
+                cleared = await angel_one_auth.invalidate_if_matches(session)
+                if cleared:
+                    logger.info(
+                        "[%s] Cleared cached Angel One session after Invalid Token; "
+                        "next attempt will re-login.",
+                        symbol,
+                    )
             raise AngelOneAPIException(message=message, error_code=error_code)
 
         raw_candles: list | None = body.get("data")

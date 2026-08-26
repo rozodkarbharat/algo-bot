@@ -307,12 +307,12 @@ class HistoricalDataService:
 
         except AngelOneAuthException as exc:
             # Auth failure — propagate up; the batch should not continue.
-            log.mark_failed(str(exc))
+            log.mark_failed(_format_sync_error(exc))
             await self._log_repo.update_log(log)
             raise
 
         except Exception as exc:
-            log.mark_failed(str(exc))
+            log.mark_failed(_format_sync_error(exc))
             await self._log_repo.update_log(log)
             logger.error("[%s] Sync failed: %s", symbol, exc, exc_info=True)
             return symbol, 0, False
@@ -400,3 +400,15 @@ class HistoricalDataService:
                     logger.warning("Symbol '%s' not found or inactive — skipping.", sym)
             return results
         return await self._universe_svc.get_active_stocks()
+
+
+def _format_sync_error(exc: BaseException) -> str:
+    """Build a sync-log error string that includes exception detail when present."""
+    message = str(exc)
+    detail = getattr(exc, "detail", None)
+    if detail is None or detail == "":
+        return message
+    detail_str = detail if isinstance(detail, str) else str(detail)
+    if detail_str in message:
+        return message
+    return f"{message} | {detail_str}"
